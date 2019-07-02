@@ -12,7 +12,7 @@ using Oxide.Ext.Discord.DiscordObjects;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Connect", "Iv Misticos", "1.0.6")]
+    [Info("Discord Connect", "Iv Misticos", "1.0.7")]
     [Description("Discord account connection with API")]
     public class DiscordConnect : CovalencePlugin
     {
@@ -208,7 +208,7 @@ namespace Oxide.Plugins
             }, this);
         }
 
-        private void Init()
+        private void Loaded()
         {
             _ins = this;
             
@@ -226,7 +226,7 @@ namespace Oxide.Plugins
 
                 if (_config.EnableStatus)
                 {
-                    _client.UpdateStatus(new Presence
+                    _client?.UpdateStatus(new Presence
                     {
                         Game = new Ext.Discord.DiscordObjects.Game
                         {
@@ -245,7 +245,7 @@ namespace Oxide.Plugins
                     });
             }
             
-            AddCovalenceCommand(_config.Command, "CommandAuth");
+            AddCovalenceCommand(_config.Command, nameof(CommandAuth));
             
             LoadData();
             timer.Every(1f, DoExpiration);
@@ -265,14 +265,14 @@ namespace Oxide.Plugins
         private void Discord_MemberRemoved(GuildMember member)
         {
             // No user found
-            var found = PlayerData.FindByDiscord(member.user.id);
+            var found = PlayerData.FindByDiscord(member?.user?.id);
             if (found == null)
                 return;
 
             if (!string.IsNullOrEmpty(_config.GroupLeft))
             {
                 var player = players.FindPlayerById(found.GameId);
-                player.RemoveFromGroup(_config.GroupLeft);
+                player?.RemoveFromGroup(_config.GroupLeft);
             }
 
             Interface.Oxide.CallHook("OnDiscordAuthLeave", found.GameId, found.DiscordId);
@@ -345,7 +345,7 @@ namespace Oxide.Plugins
                 _data.Add(new PlayerData
                 {
                     DiscordId = message.author.id,
-                    GameId = info.Key
+                    GameId = info.Player.Id
                 });
 
                 channel.CreateMessage(_client, GetMsg("Authenticated", info.Player.Id));
