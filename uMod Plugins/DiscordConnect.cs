@@ -12,7 +12,7 @@ using Oxide.Ext.Discord.DiscordObjects;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Connect", "Iv Misticos", "1.0.7")]
+    [Info("Discord Connect", "Iv Misticos", "1.0.8")]
     [Description("Discord account connection with API")]
     public class DiscordConnect : CovalencePlugin
     {
@@ -42,8 +42,6 @@ namespace Oxide.Plugins
             
             [JsonProperty(PropertyName = "Channel ID For Authentication Log")]
             public string AuthLogChannel = string.Empty;
-
-            [JsonIgnore] public Channel ParsedAuthLogChannel;
             
             [JsonProperty(PropertyName = "Enable Bot Status")]
             public bool EnableStatus = true;
@@ -236,14 +234,6 @@ namespace Oxide.Plugins
                     });
                 }
             }
-
-            if (!string.IsNullOrEmpty(_config.AuthLogChannel))
-            {
-                Channel.GetChannel(_client, _config.AuthLogChannel, channel =>
-                    {
-                        _config.ParsedAuthLogChannel = channel;
-                    });
-            }
             
             AddCovalenceCommand(_config.Command, nameof(CommandAuth));
             
@@ -350,10 +340,17 @@ namespace Oxide.Plugins
 
                 channel.CreateMessage(_client, GetMsg("Authenticated", info.Player.Id));
 
-                _config.ParsedAuthLogChannel?.CreateMessage(_client,
-                    new StringBuilder(GetMsg("Log")).Replace("{discordName}", message.author.username)
-                        .Replace("{discordId}", message.author.id).Replace("{gameId}", info.Player.Id)
-                        .Replace("{gameName}", info.Player.Name).ToString());
+
+                if (!string.IsNullOrEmpty(_config.AuthLogChannel))
+                {
+                    Channel.GetChannel(_client, _config.AuthLogChannel, logChannel =>
+                    {
+                        logChannel?.CreateMessage(_client,
+                            new StringBuilder(GetMsg("Log")).Replace("{discordName}", message.author.username)
+                                .Replace("{discordId}", message.author.id).Replace("{gameId}", info.Player.Id)
+                                .Replace("{gameName}", info.Player.Name).ToString());
+                    });
+                }
 
                 if (!string.IsNullOrEmpty(_config.GroupConnected))
                 {
