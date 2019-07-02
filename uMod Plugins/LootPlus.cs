@@ -9,7 +9,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Loot Plus", "Iv Misticos", "2.1.0")]
+    [Info("Loot Plus", "Iv Misticos", "2.1.1")]
     [Description("Modify loot on your server.")]
     public class LootPlus : RustPlugin
     {
@@ -70,6 +70,9 @@ namespace Oxide.Plugins
         {
             [JsonProperty(PropertyName = "Entity Shortname")]
             public string Shortname = "entity.shortname";
+            
+            [JsonProperty(PropertyName = "API Shortname")]
+            public string APIShortname = "";
             
             [JsonProperty(PropertyName = "Monument Prefab (Empty To Ignore)")]
             public string Monument = "";
@@ -502,16 +505,6 @@ namespace Oxide.Plugins
             }
         }
 
-        /*
-        private void OnLootSpawn(StorageContainer container)
-        {
-            if (!_initialized)
-                return;
-            
-            NextFrame(() => LootPlusController.Instance.StartCoroutine(LootHandler(container)));
-        }
-        */
-
         private void OnEntitySpawned(BaseNetworkable entity)
         {
             if (!_initialized)
@@ -562,6 +555,15 @@ namespace Oxide.Plugins
         
         #endregion
         
+        #region API
+
+        private void FillContainer(ItemContainer container, string apiShortname)
+        {
+            HandleAPIFill(container, apiShortname);
+        }
+        
+        #endregion
+        
         #region Helpers
 
         private void RunLootHandler(BaseNetworkable networkable, ItemContainer inventory, int containerIndex)
@@ -569,7 +571,7 @@ namespace Oxide.Plugins
             NextFrame(() => LootPlusController.Instance.StartCoroutine(LootHandler(networkable, inventory, containerIndex)));
         }
 
-        private IEnumerator LootHandler(BaseNetworkable networkable, ItemContainer inventory, int containerIndex)
+        private IEnumerator LootHandler(BaseNetworkable networkable, ItemContainer inventory, int containerIndex, string apiShortname = null)
         {
             if (inventory == null)
                 yield break;
@@ -577,15 +579,23 @@ namespace Oxide.Plugins
             for (var i = 0; i < _config.Containers.Count; i++)
             {
                 var container = _config.Containers[i];
-                if (container.Shortname != "global" && container.Shortname != networkable.ShortPrefabName)
-                    continue;
+                if (networkable != null && apiShortname == null)
+                {
+                    if (container.Shortname != "global" && container.Shortname != networkable.ShortPrefabName)
+                        continue;
+                }
+                else
+                {
+                    if (apiShortname != container.APIShortname)
+                        continue;
+                }
 
                 if (containerIndex != -1 && !container.ContainerIndexes.Contains(containerIndex))
                 {
                     continue;
                 }
 
-                if (!string.IsNullOrEmpty(container.Monument))
+                if (networkable != null && apiShortname == null && !string.IsNullOrEmpty(container.Monument))
                 {
                     var monument = GetMonumentName(networkable.transform.position);
                     PrintDebug($"Found monument: {monument}");
@@ -600,24 +610,13 @@ namespace Oxide.Plugins
             }
         }
 
-        /*
-        private void HandleContainer(ItemContainer itemContainer, ContainerData container)
-        {
-            PrintDebug(
-                $"Handling container {itemContainer.entityOwner.ShortPrefabName} ({itemContainer.entityOwner.net.ID} @ {itemContainer.entityOwner.transform.position})");
-
-            if (_config.ShuffleItems && !container.ModifyItems) // No need to shuffle for items modification
-                container.Items?.Shuffle();
-
-            itemContainer.capacity = itemContainer.itemList.Count;
-            HandleInventory(itemContainer, container);
-        }
-        */
-
         private IEnumerator HandleInventory(BaseNetworkable networkable, ItemContainer inventory, ContainerData container)
         {
-            PrintDebug(
-                $"Handling container {networkable.ShortPrefabName} ({networkable.net.ID} @ {networkable.transform.position})");
+            if (networkable != null)
+            {
+                PrintDebug(
+                    $"Handling container {networkable.ShortPrefabName} ({networkable.net.ID} @ {networkable.transform.position})");
+            }
 
             if (_config.ShuffleItems && !container.ModifyItems) // No need to shuffle for items modification
                 container.Items?.Shuffle();
@@ -665,6 +664,13 @@ namespace Oxide.Plugins
             {
                 yield return HandleInventoryModify(inventory, container);
             }
+        }
+
+        private void HandleAPIFill(ItemContainer container, string apiShortname)
+        {
+            PrintDebug($"Handling API fill with API Shortname: {apiShortname}");
+            // ReSharper disable once IteratorMethodResultIsIgnored
+            LootHandler(null, container, 0, apiShortname);
         }
 
         private static IEnumerator HandleInventoryAddReplace(ItemContainer inventory, ContainerData container)
