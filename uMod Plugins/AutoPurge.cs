@@ -1,11 +1,9 @@
 using System;
-using System.Collections.Generic;
 using Newtonsoft.Json;
-using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Auto Purge", "Fujikura/Norn", "2.0.0")]
+    [Info("Auto Purge", "misticos", "2.0.0")]
     [Description("Remove entities if the owner becomes inactive")]
     public class AutoPurge : RustPlugin
     {
@@ -29,13 +27,9 @@ namespace Oxide.Plugins
 		    }
 		    catch
 		    {
-			    Config.WriteObject(_config, false, $"{Interface.GetMod().ConfigDirectory}/{Name}.jsonError");
-			    PrintError("The configuration file contains an error and has been replaced with a default config.\n" +
-			               "The error configuration file was saved in the .jsonError extension");
+			    PrintError("Your configuration file contains an error. Using default configuration values.");
 			    LoadDefaultConfig();
 		    }
-
-		    SaveConfig();
 	    }
 
 	    protected override void SaveConfig() => Config.WriteObject(_config);

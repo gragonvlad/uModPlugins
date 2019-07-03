@@ -1,16 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
-using Oxide.Game.Rust.Libraries;
 using UnityEngine;
 using Time = UnityEngine.Time;
-// ReSharper disable UnusedMember.Local
 
 namespace Oxide.Plugins
 {
-    [Info("Object Remover", "Iv Misticos", "3.0.3")]
+    [Info("Object Remover", "Iv Misticos", "3.0.4")]
     [Description("Removes furnaces, lanterns, campfires, buildings etc. on command")]
     class ObjectRemover : RustPlugin
     {
@@ -24,7 +21,7 @@ namespace Oxide.Plugins
 
         private Configuration _config = new Configuration();
 
-        public class Configuration
+        private class Configuration
         {
             [JsonProperty(PropertyName = "Object Command Permission")]
             public string PermissionUse = "objectremover.use";
@@ -45,13 +42,9 @@ namespace Oxide.Plugins
             }
             catch
             {
-                Config.WriteObject(_config, false, $"{Interface.Oxide.ConfigDirectory}/{Name}.jsonError");
-                PrintError("The configuration file contains an error and has been replaced with a default config.\n" +
-                           "The error configuration file was saved in the .jsonError extension");
+                PrintError("Your configuration file contains an error. Using default configuration values.");
                 LoadDefaultConfig();
             }
-
-            SaveConfig();
         }
 
         protected override void LoadDefaultConfig() => _config = new Configuration();
@@ -88,9 +81,6 @@ namespace Oxide.Plugins
             if (!permission.PermissionExists(_config.PermissionUse))
                 permission.RegisterPermission(_config.PermissionUse, this);
 
-//            var cmdLib = GetLibrary<Command>();
-//            cmdLib.AddChatCommand(_config.Command, this, CommandChatObject);
-//            cmdLib.AddConsoleCommand(_config.Command, this, CommandConsoleObject);
             AddCovalenceCommand(_config.Command, "CommandObject");
         }
         

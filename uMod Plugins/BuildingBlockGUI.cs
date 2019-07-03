@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using Oxide.Core;
 using Oxide.Game.Rust.Cui;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Building Block GUI", "Iv Misticos", "2.0.0")]
+    [Info("Building Block GUI", "Iv Misticos", "2.0.1")]
     [Description("Displays GUI to player when he enters or leaves building block without need of Planner")]
     public class BuildingBlockGUI : RustPlugin
     {
@@ -57,13 +56,9 @@ namespace Oxide.Plugins
             }
             catch
             {
-                Config.WriteObject(_config, false, $"{Interface.Oxide.ConfigDirectory}/{Name}.jsonError");
-                PrintError("The configuration file contains an error and has been replaced with a default config.\n" +
-                           "The error configuration file was saved in the .jsonError extension");
+                PrintError("Your configuration file contains an error. Using default configuration values.");
                 LoadDefaultConfig();
             }
-
-            SaveConfig();
         }
 
         protected override void LoadDefaultConfig() => _config = new Configuration();

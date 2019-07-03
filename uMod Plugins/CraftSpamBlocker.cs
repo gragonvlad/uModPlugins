@@ -7,7 +7,7 @@ using Object = UnityEngine.Object;
 
 namespace Oxide.Plugins
 {
-    [Info("Craft Spam Blocker", "Iv Misticos", "1.0.0")]
+    [Info("Craft Spam Blocker", "Iv Misticos", "1.0.1")]
     [Description("Prevents items from being crafted if the player's inventory is full")]
     class CraftSpamBlocker : RustPlugin
     {
@@ -48,13 +48,9 @@ namespace Oxide.Plugins
             }
             catch
             {
-                Config.WriteObject(_config, false, $"{Interface.GetMod().ConfigDirectory}/{Name}.jsonError");
-                PrintError("The configuration file contains an error and has been replaced with a default config.\n" +
-                           "The error configuration file was saved in the .jsonError extension");
+                PrintError("Your configuration file contains an error. Using default configuration values.");
                 LoadDefaultConfig();
             }
-
-            SaveConfig();
         }
 
         protected override void SaveConfig() => Config.WriteObject(_config);

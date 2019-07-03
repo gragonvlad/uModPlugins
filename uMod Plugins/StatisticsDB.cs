@@ -11,7 +11,7 @@ using Time = Oxide.Core.Libraries.Time;
 
 namespace Oxide.Plugins
 {
-    [Info("Statistics DB", "Iv Misticos", "1.0.2")]
+    [Info("Statistics DB", "Iv Misticos", "1.0.3")]
     [Description("Statistics database for developers")]
     class StatisticsDB : RustPlugin
     {
@@ -115,13 +115,9 @@ namespace Oxide.Plugins
             }
             catch
             {
-                Config.WriteObject(_config, false, $"{Interface.GetMod().ConfigDirectory}/{Name}.jsonError");
-                PrintError("The configuration file contains an error and has been replaced with a default config.\n" +
-                           "The error configuration file was saved in the .jsonError extension");
+                PrintError("Your configuration file contains an error. Using default configuration values.");
                 LoadDefaultConfig();
             }
-
-            SaveConfig();
         }
 
         protected override void LoadDefaultConfig() => _config = new Configuration();

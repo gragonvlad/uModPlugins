@@ -10,7 +10,7 @@ namespace Oxide.Plugins
     {
         #region Variables
 
-        private List<BasePlayer> ActiveSpeakers = new List<BasePlayer>();
+        private List<BasePlayer> _activeSpeakers = new List<BasePlayer>();
 
         private const string PermSpeak = "adminradio.speak";
         private const string PermListen = "adminradio.listen";
@@ -40,7 +40,7 @@ namespace Oxide.Plugins
         
         private void OnPlayerVoice(BasePlayer player, byte[] data)
         {
-            if (!ActiveSpeakers.Contains(player))
+            if (!_activeSpeakers.Contains(player))
                 return;
 
             Broadcast(player, data);
@@ -65,13 +65,13 @@ namespace Oxide.Plugins
                 return true;
             }
 
-            if (ActiveSpeakers.Remove(player))
+            if (_activeSpeakers.Remove(player))
             {
                 arg.ReplyWith(GetMsg("Disabled", player.UserIDString));
             }
             else
             {
-                ActiveSpeakers.Add(player);
+                _activeSpeakers.Add(player);
                 arg.ReplyWith(GetMsg("Enabled", player.UserIDString));
             }
 

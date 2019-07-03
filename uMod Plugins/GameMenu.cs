@@ -9,11 +9,11 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Game Menu", "Iv Misticos", "1.0.5")]
+    [Info("Game Menu", "Iv Misticos", "1.0.6")]
     [Description("Create your own GUI menu with buttons and title.")]
     class GameMenu : RustPlugin
     {
-        #region Plugin Variables
+        #region Variables
 
         private static CuiButton _backgroundButton;
         
@@ -103,14 +103,13 @@ namespace Oxide.Plugins
             try
             {
                 _config = Config.ReadObject<Configuration>();
+                if (_config == null) throw new Exception();
             }
-            catch (Exception e)
+            catch
             {
-                PrintError(e.ToString());
+                PrintError("Your configuration file contains an error. Using default configuration values.");
                 LoadDefaultConfig();
             }
-
-            SaveConfig();
         }
 
         protected override void SaveConfig() => Config.WriteObject(_config);

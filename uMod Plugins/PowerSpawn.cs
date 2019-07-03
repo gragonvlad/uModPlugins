@@ -11,7 +11,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Power Spawn", "Iv Misticos", "1.1.0")]
+    [Info("Power Spawn", "Iv Misticos", "1.1.1")]
     [Description("Control players' spawning")]
     class PowerSpawn : RustPlugin
     {
@@ -68,7 +68,7 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Debug")]
             public bool Debug = false;
         }
-        
+
         protected override void LoadConfig()
         {
             base.LoadConfig();
@@ -79,13 +79,9 @@ namespace Oxide.Plugins
             }
             catch
             {
-                Config.WriteObject(_config, false, $"{Interface.Oxide.ConfigDirectory}/{Name}.jsonError");
-                PrintError("The configuration file contains an error and has been replaced with a default config.\n" +
-                           "The error configuration file was saved in the .jsonError extension");
+                PrintError("Your configuration file contains an error. Using default configuration values.");
                 LoadDefaultConfig();
             }
-
-            SaveConfig();
         }
 
         protected override void LoadDefaultConfig() => _config = new Configuration();

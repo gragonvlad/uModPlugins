@@ -8,7 +8,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Cash System", "Iv Misticos", "1.0.4")]
+    [Info("Cash System", "Iv Misticos", "1.0.5")]
     [Description("Rich economics system")]
     class CashSystem : CovalencePlugin
     {
@@ -60,13 +60,9 @@ namespace Oxide.Plugins
             }
             catch
             {
-                Config.WriteObject(_config, false, $"{Interface.Oxide.ConfigDirectory}/{Name}.jsonError");
-                PrintError("The configuration file contains an error and has been replaced with a default config.\n" +
-                           "The error configuration file was saved in the .jsonError extension");
+                PrintError("Your configuration file contains an error. Using default configuration values.");
                 LoadDefaultConfig();
             }
-
-            SaveConfig();
         }
 
         protected override void LoadDefaultConfig() => _config = new Configuration();
@@ -275,68 +271,6 @@ namespace Oxide.Plugins
         }
         
         #endregion
-        
-//        #region Commands
-//
-//        [Command("balance")]
-//        private void CommandBalance(IPlayer player, string command, string[] args)
-//        {
-//            if (!player.IsAdmin)
-//            {
-//                player.Reply(GetMsg("Not Enough Permissions", player.Id));
-//                return;
-//            }
-//
-//            if (args.Length <= 2)
-//            {
-//                player.Reply(GetMsg("Balance Help", player.Id));
-//                return;
-//            }
-//
-//            switch (args[0])
-//            {
-//                case "get":
-//                {
-//                    var balance = GetBalance(args[1], args[2]);
-//                    if (double.IsNaN(balance))
-//                    {
-//                        player.Reply(GetMsg("Balance Get Error", player.Id));
-//                        return;
-//                    }
-//                    
-//                    player.Reply(GetMsg("Balance Get", player.Id).Replace("{balance}", $"{balance}"));
-//                    break;
-//                }
-//
-//                case "add":
-//                {
-//                    if (args.Length <= 3)
-//                    {
-//                        player.Reply(GetMsg("Balance Help", player.Id));
-//                        return;
-//                    }
-//
-//                    double amount;
-//                    if (!double.TryParse(args[3], out amount))
-//                    {
-//                        player.Reply(GetMsg("Incorrect Number", player.Id));
-//                        return;
-//                    }
-//
-//                    var success = AddTransaction(args[1], args[2], amount, GetMsg("Admin Money Transfer", args[1]));
-//                    if (success)
-//                    {
-//                        player.Reply(GetMsg("Balance Add Success", player.Id));
-//                        return;
-//                    }
-//
-//                    player.Reply(GetMsg("Balance Add Error", player.Id));
-//                    break;
-//                }
-//            }
-//        }
-//        
-//        #endregion
         
         #region API
 

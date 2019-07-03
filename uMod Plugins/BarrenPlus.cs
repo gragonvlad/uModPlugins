@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using Oxide.Core;
 using UnityEngine;
 using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Barren Plus", "Iv Misticos", "1.0.5")]
+    [Info("Barren Plus", "Iv Misticos", "1.0.6")]
     [Description("Let JunkPiles and DiveSites be alive on Barren!")]
     class BarrenPlus : RustPlugin
     {
@@ -66,13 +65,9 @@ namespace Oxide.Plugins
             }
             catch
             {
-                Config.WriteObject(_config, false, $"{Interface.Oxide.ConfigDirectory}/{Name}.jsonError");
-                PrintError("The configuration file contains an error and has been replaced with a default config.\n" +
-                           "The error configuration file was saved in the .jsonError extension");
+                PrintError("Your configuration file contains an error. Using default configuration values.");
                 LoadDefaultConfig();
             }
-
-            SaveConfig();
         }
 
         protected override void LoadDefaultConfig() => _config = new Configuration();

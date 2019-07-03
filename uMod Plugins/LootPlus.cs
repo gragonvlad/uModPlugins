@@ -9,7 +9,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Loot Plus", "Iv Misticos", "2.1.1")]
+    [Info("Loot Plus", "Iv Misticos", "2.1.2")]
     [Description("Modify loot on your server.")]
     public class LootPlus : RustPlugin
     {
@@ -254,12 +254,9 @@ namespace Oxide.Plugins
             }
             catch
             {
-                PrintError("The configuration file contains an error.");
-                Interface.Oxide.UnloadPlugin(Name);
-                return;
+                PrintError("Your configuration file contains an error. Using default configuration values.");
+                LoadDefaultConfig();
             }
-
-            SaveConfig();
         }
 
         protected override void LoadDefaultConfig() => _config = new Configuration();

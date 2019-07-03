@@ -5,10 +5,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Items Info", "Iv Misticos", "1.0.3")]
+    [Info("Items Info", "Iv Misticos", "1.0.4")]
     [Description("Get actual information about items.")]
     class ItemsInfo : RustPlugin
     {
+        #region Hooks
+        
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
@@ -22,6 +24,10 @@ namespace Oxide.Plugins
             cmd.AddConsoleCommand("itemsinfo.all", this, CommandConsoleHandle);
             cmd.AddConsoleCommand("itemsinfo.find", this, CommandConsoleHandle);
         }
+        
+        #endregion
+        
+        #region Commands
 
         private bool CommandConsoleHandle(ConsoleSystem.Arg arg)
         {
@@ -31,6 +37,10 @@ namespace Oxide.Plugins
             arg.ReplyWith(GetItemsInfo(arg.Args, arg.cmd.FullName == "itemsinfo.find", arg.Player()?.UserIDString));
             return true;
         }
+        
+        #endregion
+        
+        #region Helpers
 
         private string GetItemsInfo(IReadOnlyList<string> parameters, bool search, string id)
         {
@@ -101,5 +111,7 @@ namespace Oxide.Plugins
         }
 
         private string GetMsg(string key, string userId = null) => lang.GetMessage(key, this, userId);
+        
+        #endregion
     }
 }

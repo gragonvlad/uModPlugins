@@ -6,7 +6,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Plant Drop", "Iv Misticos", "1.2.1")]
+    [Info("Plant Drop", "Iv Misticos", "1.2.2")]
     [Description("Allows planting crops anywhere by dropping the seed")]
     class PlantDrop : RustPlugin
     {
@@ -43,13 +43,9 @@ namespace Oxide.Plugins
             }
             catch
             {
-                Config.WriteObject(_config, false, $"{Interface.Oxide.ConfigDirectory}/{Name}.jsonError");
-                PrintError("The configuration file contains an error and has been replaced with a default config.\n" +
-                           "The error configuration file was saved in the .jsonError extension");
+                PrintError("Your configuration file contains an error. Using default configuration values.");
                 LoadDefaultConfig();
             }
-
-            SaveConfig();
         }
 
         protected override void LoadDefaultConfig() => _config = new Configuration();

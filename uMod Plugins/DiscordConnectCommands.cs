@@ -2,11 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Newtonsoft.Json;
-using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Connect Commands", "Iv Misticos", "1.0.2")]
+    [Info("Discord Connect Commands", "Iv Misticos", "1.0.3")]
     [Description("Execute commands on Discord Connect events")]
     class DiscordConnectCommands : CovalencePlugin
     {
@@ -48,13 +47,9 @@ namespace Oxide.Plugins
             }
             catch
             {
-                Config.WriteObject(_config, false, $"{Interface.Oxide.ConfigDirectory}/{Name}.jsonError");
-                PrintError("The configuration file contains an error and has been replaced with a default config.\n" +
-                           "The error configuration file was saved in the .jsonError extension");
+                PrintError("Your configuration file contains an error. Using default configuration values.");
                 LoadDefaultConfig();
             }
-
-            SaveConfig();
         }
 
         protected override void SaveConfig() => Config.WriteObject(_config);

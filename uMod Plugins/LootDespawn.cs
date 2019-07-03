@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Loot Despawn", "Iv Misticos", "2.0.2")]
+    [Info("Loot Despawn", "Iv Misticos", "2.0.3")]
     [Description("Customize loot despawn")]
     public class LootDespawn : RustPlugin
     {
@@ -41,13 +40,9 @@ namespace Oxide.Plugins
             }
             catch
             {
-                Config.WriteObject(_config, false, $"{Interface.Oxide.ConfigDirectory}/{Name}.jsonError");
-                PrintError("The configuration file contains an error and has been replaced with a default config.\n" +
-                           "The error configuration file was saved in the .jsonError extension");
+                PrintError("Your configuration file contains an error. Using default configuration values.");
                 LoadDefaultConfig();
             }
-
-            SaveConfig();
         }
 
         protected override void LoadDefaultConfig() => _config = new Configuration();

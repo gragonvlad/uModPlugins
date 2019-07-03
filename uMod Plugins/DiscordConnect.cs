@@ -12,7 +12,7 @@ using Oxide.Ext.Discord.DiscordObjects;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Connect", "Iv Misticos", "1.0.8")]
+    [Info("Discord Connect", "Iv Misticos", "1.0.9")]
     [Description("Discord account connection with API")]
     public class DiscordConnect : CovalencePlugin
     {
@@ -82,14 +82,13 @@ namespace Oxide.Plugins
             try
             {
                 _config = Config.ReadObject<Configuration>();
+                if (_config == null) throw new Exception();
             }
-            catch (Exception e)
+            catch
             {
-                PrintError(e.ToString());
+                PrintError("Your configuration file contains an error. Using default configuration values.");
                 LoadDefaultConfig();
             }
-
-            SaveConfig();
         }
 
         protected override void SaveConfig() => Config.WriteObject(_config);
