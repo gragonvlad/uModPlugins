@@ -13,7 +13,7 @@ using Time = Oxide.Core.Libraries.Time;
 
 namespace Oxide.Plugins
 {
-    [Info("Smart Chat Bot", "Iv Misticos", "2.0.7")]
+    [Info("Smart Chat Bot", "Iv Misticos", "2.0.8")]
     [Description("I send chat messages based on some triggers or time.")]
     class SmartChatBot : RustPlugin
     {
@@ -289,7 +289,7 @@ namespace Oxide.Plugins
         {
             PrintDebug("Called OnBetterChat");
             object playerObj, messageObj;
-            if (!data.TryGetValue("Player", out playerObj) || !data.TryGetValue("Text", out messageObj))
+            if (!data.TryGetValue("Player", out playerObj) || !data.TryGetValue("Message", out messageObj))
                 return null;
             
             var player = BasePlayer.Find((playerObj as IPlayer)?.Id);
