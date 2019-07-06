@@ -133,6 +133,7 @@ namespace Oxide.Plugins
 
         #region Working With Containers
 
+        // TODO: Remove all content to player's inventory or move it to a secret items list
         private void OnItemAddedToContainer(ItemContainer itemContainer, Item item)
         {
             var player = itemContainer.GetOwnerPlayer();
@@ -154,12 +155,42 @@ namespace Oxide.Plugins
 
         private void OnItemRemovedFromContainer(ItemContainer itemContainer, Item item)
         {
-            var player = itemContainer.GetOwnerPlayer();
+            var player = itemContainer.entityOwner as BasePlayer;
             var container = ContainerController.Find(itemContainer);
-            if (container == null || player == null || container.Owner != player)
+            if (container == null)
+            {
+                PrintDebug("Container not found");
                 return;
+            }
+
+            if (player == null)
+            {
+                PrintDebug("Player not found");
+                return;
+            }
+
+            if (container.Owner != player)
+            {
+                PrintDebug("Wrong container owner");
+                return;
+            }
             
             PrintDebug("OnItemRemovedFromContainer");
+            var source = container.Container.GetSlot(0);
+            var content = source?.contents;
+            if (content?.itemList != null && content.itemList.Count > 0)
+            {
+                for (var i = content.itemList.Count - 1; i >= 0; i--)
+                {
+                    var item2 = content.itemList[i];
+                    if (item2.MoveToContainer(item.contents)) continue;
+
+                    if (item2.MoveToContainer(player.inventory.containerMain)) continue;
+                    
+                    PrintDebug("Unable to move contents items");
+                }
+            }
+
             container.Clear();
         }
 
@@ -683,7 +714,7 @@ namespace Oxide.Plugins
 
             public void Clear()
             {
-                PrintDebug($"Clearing container");
+                PrintDebug("Clearing container");
                 
                 for (var i = 0; i < Container.itemList.Count; i++)
                 {
@@ -705,83 +736,94 @@ namespace Oxide.Plugins
 
             public void UpdateContent(int page)
             {
-                var source = Container.GetSlot(0);
-                source?.MarkDirty();
-
-                /*
-                PrintDebug($"Updating content ({page} page)");
-                Clear(false);
-
-                if (page < 0 || !IsValid() || container.itemList.Count <= 0)
+                if (!IsValid())
                 {
-                    PrintDebug("Invalid page / items / etc");
+                    PrintDebug("Invalid container");
                     return;
                 }
-
-                if (isOpened)
-                {
-                    PrintDebug("Opened. Drawing UI");
-                    DrawUI(page);
-                }
-
-                var item = container.GetSlot(0);
-                List<ulong> skins;
-                if (!_config.Skins.TryGetValue(item.info.shortname, out skins))
-                {
-                    PrintDebug("Cannot find skins");
-                    return;
-                }
-
-                var perPage = container.capacity - 1;
-                var offset = perPage * page;
-                if (offset >= skins.Count)
-                    return;
                 
-                for (var i = 0; i < container.itemList.Count; i++)
-                {
-                    if (container.itemList[i].position == 0) // :(
-                        continue;
+                var source = Container.GetSlot(0);
 
-                    container.itemList[i].DoRemove();
-                    container.itemList.RemoveAt(i);
+                if (source == null)
+                {
+                    PrintDebug("Source item is null");
+                    return;
                 }
+
+                List<ulong> skins;
+                if (!_config.Skins.TryGetValue(source.info.shortname, out skins))
+                {
+                    return;
+                }
+
+                var perPage = Container.capacity - 1;
+                var offset = perPage * page;
+
+                if (page < 0 || offset >= skins.Count)
+                {
+                    PrintDebug("Invalid page");
+                    return;
+                }
+                
+                source.SetParent(null);
+                
+                PrintDebug($"Updating content with {page} page");
+                Clear();
+                
+                MoveItem(source, 0);
+                
+                // TODO: Draw UI
 
                 var slot = 1;
                 for (var i = 0; i < skins.Count; i++)
                 {
-                    if (slot > container.capacity)
+                    if (slot > Container.capacity)
                         break;
-                    
+
                     if (offset > i)
                         continue;
-                    
+
                     var skin = skins[i];
-                    var newItem = GetDuplicateItem(item, skin);
+                    var duplicate = GetDuplicateItem(source, skin);
                     
-                    newItem.RemoveFromContainer();
-                    newItem.RemoveFromWorld();
-                    
-                    newItem.position = slot++;
-                    newItem.parent = container;
-                    
-                    container.itemList.Add(newItem);
-                    
-                    foreach (var itemMod in newItem.info.itemMods)
-                        itemMod.OnParentChanged(newItem);
+                    MoveItem(duplicate, slot++);
                 }
-                */
+                
+                PrintDebug("Changed content");
             }
 
             public Item GetDuplicateItem(Item item, ulong skin)
             {
                 PrintDebug($"Getting duplicate for {item.info.shortname}..");
 
-                var newItem = ItemManager.Create(item.info, item.amount, skin);
-                newItem._maxCondition = item._maxCondition;
-                newItem._condition = item._condition;
-                newItem.contents.capacity = item.contents.capacity;
+                var duplicate = ItemManager.Create(item.info, item.amount, skin);
+                duplicate._maxCondition = item._maxCondition;
+                duplicate._condition = item._condition;
+                duplicate.contents.capacity = item.contents.capacity;
+
+                var projectile = item.GetHeldEntity() as BaseProjectile;
+                var projectileDuplicate = duplicate.GetHeldEntity() as BaseProjectile;
+                if (projectile != null && projectileDuplicate != null)
+                {
+                    PrintDebug("Processing projectile");
+                    projectileDuplicate.primaryMagazine = projectile.primaryMagazine;
+                }
                 
-                return newItem;
+                return duplicate;
+            }
+
+            private void MoveItem(Item item, int slot)
+            {
+                item.RemoveFromContainer();
+                item.RemoveFromWorld();
+
+                item.position = slot;
+                item.parent = Container;
+
+                Container.itemList.Add(item);
+                    
+                foreach (var mod in item.info.itemMods)
+                    mod.OnParentChanged(item);
             }
 
             private bool IsValid() => Owner == null || Container?.itemList != null;
