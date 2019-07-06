@@ -141,6 +141,13 @@ namespace Oxide.Plugins
                 return;
             
             PrintDebug("OnItemAddedToContainer");
+
+            if (itemContainer.itemList.Count != 1)
+            {
+                item.position = -1;
+                container.GiveItemBack();
+            }
+
             item.position = 0;
             container.UpdateContent(0);
         }
@@ -149,7 +156,7 @@ namespace Oxide.Plugins
         {
             var player = itemContainer.GetOwnerPlayer();
             var container = ContainerController.Find(itemContainer);
-            if (container == null || player == null)
+            if (container == null || player == null || container.Owner != player)
                 return;
             
             PrintDebug("OnItemRemovedFromContainer");
@@ -246,7 +253,7 @@ namespace Oxide.Plugins
                         break;
                     }
 
-                    timer.Once(1f, () => container.Show());
+                    timer.Once(0.5f, () => container.Show());
                     break;
                 }
 

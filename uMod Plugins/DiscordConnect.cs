@@ -339,7 +339,6 @@ namespace Oxide.Plugins
 
                 channel.CreateMessage(_client, GetMsg("Authenticated", info.Player.Id));
 
-
                 if (!string.IsNullOrEmpty(_config.AuthLogChannel))
                 {
                     Channel.GetChannel(_client, _config.AuthLogChannel, logChannel =>
