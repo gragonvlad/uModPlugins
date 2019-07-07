@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Balloon Plus", "Iv Misticos", "1.0.3")]
+    [Info("Balloon Plus", "Iv Misticos", "1.0.4")]
     [Description("Control your balloon's flight")]
     class BalloonPlus : RustPlugin
     {
@@ -102,15 +102,14 @@ namespace Oxide.Plugins
             balloon.myRigidbody.AddForce(direction.x, 0, direction.z, ForceMode.Force); // We shouldn't move the balloon up or down, so I use 0 here as y.
         }
 
-        private void Init()
+        private void OnServerInitialized()
         {
             _ins = this;
             
             if (!Enum.TryParse(_config.MoveButton, out _config.ParsedMoveButton))
             {
-                PrintError("You specified incorrect move button. Please, edit your configuration.");
-                Interface.GetMod().UnloadPlugin(Name);
-                return;
+                PrintError("Unable to parse the moving button");
+                _config.ParsedMoveButton = BUTTON.SPRINT;
             }
 
             for (var i = 0; i < _config.Modifiers.Count; i++)

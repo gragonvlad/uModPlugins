@@ -12,7 +12,7 @@ using Oxide.Ext.Discord.DiscordObjects;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Connect", "Iv Misticos", "1.0.9")]
+    [Info("Discord Connect", "Iv Misticos", "1.0.10")]
     [Description("Discord account connection with API")]
     public class DiscordConnect : CovalencePlugin
     {
@@ -205,16 +205,15 @@ namespace Oxide.Plugins
             }, this);
         }
 
-        private void Loaded()
+        private void Init()
         {
             _ins = this;
             
             var parsed = ConvertToSeconds(_config.CodeLifetime, out _config.ParsedCodeLifetime);
             if (!parsed)
             {
-                PrintError("Please, specify correct code lifetime!");
-                Interface.Oxide.UnloadPlugin(Name);
-                return;
+                PrintError("Unable to parse code lifetime");
+                _config.ParsedCodeLifetime = 60;
             }
 
             if (!string.IsNullOrEmpty(_config.Token))

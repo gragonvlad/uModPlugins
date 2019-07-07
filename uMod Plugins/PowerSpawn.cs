@@ -11,7 +11,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Power Spawn", "Iv Misticos", "1.1.1")]
+    [Info("Power Spawn", "Iv Misticos", "1.1.2")]
     [Description("Control players' spawning")]
     class PowerSpawn : RustPlugin
     {
@@ -200,7 +200,7 @@ namespace Oxide.Plugins
                 if (_config.EnableRespawnGroup)
                 {
                     PrintError("Cannot use both pre-generated spawn locations and respawn group. Disable one of them.");
-                    Interface.Oxide.UnloadPlugin(Name);
+                    Unsubscribe(nameof(OnPlayerRespawn));
                     return;
                 }
                 
@@ -215,7 +215,7 @@ namespace Oxide.Plugins
                     if (!position.HasValue)
                     {
                         PrintWarning("Could not pre-generate respawn locations");
-                        Interface.Oxide.UnloadPlugin(Name);
+                        Unsubscribe(nameof(OnPlayerRespawn));
                         return;
                     }
                     

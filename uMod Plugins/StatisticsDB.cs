@@ -1,3 +1,5 @@
+// Requires: ConnectionDB
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,7 +13,7 @@ using Time = Oxide.Core.Libraries.Time;
 
 namespace Oxide.Plugins
 {
-    [Info("Statistics DB", "Iv Misticos", "1.0.3")]
+    [Info("Statistics DB", "Iv Misticos", "1.0.4")]
     [Description("Statistics database for developers")]
     class StatisticsDB : RustPlugin
     {
@@ -434,32 +436,9 @@ namespace Oxide.Plugins
         
         #region Hooks
 
-        private void Loaded()
+        private void Init()
         {
-            if (ConnectionDB == null || !ConnectionDB.IsLoaded)
-            {
-                PrintWarning("This plugin requires ConnectionDB!");
-                Interface.GetMod().UnloadPlugin(Name);
-                return;
-            }
-
             LoadData();
-
-//            if (_data.Players != null)
-//            {
-//                for (var i = _data.Players.Count - 1; i >= 0; i--)
-//                {
-//                    var entry = _data.Players[i];
-//                    entry.Convert();
-//                    _data.Players.RemoveAt(i);
-//                }
-//            }
-
-            var playersCount = BasePlayer.activePlayerList.Count;
-            for (var i = 0; i < playersCount; i++)
-            {
-                OnPlayerInit(BasePlayer.activePlayerList[i]);
-            }
 
             var current = Time.GetUnixTimestamp();
             var data = _data.Statistics.ToArray();
@@ -532,6 +511,15 @@ namespace Oxide.Plugins
 
             if (!_config.CollectGathered)
                 Unsubscribe(nameof(OnDispenserGather));
+        }
+
+        private void OnServerInitialized()
+        {
+            var playersCount = BasePlayer.activePlayerList.Count;
+            for (var i = 0; i < playersCount; i++)
+            {
+                OnPlayerInit(BasePlayer.activePlayerList[i]);
+            }
         }
 
         private void OnServerSave() => SaveData();

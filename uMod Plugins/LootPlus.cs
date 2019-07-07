@@ -9,7 +9,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Loot Plus", "Iv Misticos", "2.1.2")]
+    [Info("Loot Plus", "Iv Misticos", "2.1.3")]
     [Description("Modify loot on your server.")]
     public class LootPlus : RustPlugin
     {
@@ -35,8 +35,8 @@ namespace Oxide.Plugins
 
         private class Configuration
         {
-            [JsonProperty(PropertyName = "Plugin Enabled")]
-            public bool Enabled = false;
+            [JsonProperty(PropertyName = "Refill Loot On Plugin Load")]
+            public bool RefillOnLoad = false;
             
             [JsonProperty(PropertyName = "Container Loot Save Command")]
             public string LootSaveCommand = "lootsave";
@@ -46,9 +46,6 @@ namespace Oxide.Plugins
             
             [JsonProperty(PropertyName = "Load Config Command")]
             public string LoadConfigCommand = "lootconfig";
-            
-            [JsonProperty(PropertyName = "Loot Skins", NullValueHandling = NullValueHandling.Ignore)]
-            public Dictionary<string, Dictionary<string, ulong>> Skins = null; // OLD
             
             [JsonProperty(PropertyName = "Containers", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<ContainerData> Containers = new List<ContainerData> {new ContainerData()};
@@ -409,42 +406,6 @@ namespace Oxide.Plugins
             permission.RegisterPermission(PermissionLootRefill, this);
             permission.RegisterPermission(PermissionLoadConfig, this);
 
-            // Converting old configuration
-            if (_config.Skins != null)
-            {
-                foreach (var kvp in _config.Skins)
-                {
-                    var container = kvp.Key;
-                    var dataContainer = new ContainerData
-                    {
-                        Shortname = container,
-                        Items = new List<ItemData>()
-                    };
-                    
-                    foreach (var item in kvp.Value)
-                    {
-                        var shortname = item.Key;
-                        var skin = item.Value;
-
-                        var dataItem = new ItemData
-                        {
-                            Shortname = shortname,
-                            Skins = new List<SkinData>
-                            {
-                                new SkinData
-                                {
-                                    Skin = skin
-                                }
-                            }
-                        };
-                        
-                        dataContainer.Items.Add(dataItem);
-                    }
-                    
-                    _config.Containers.Add(dataContainer);
-                }
-            }
-
             foreach (var container in _config.Containers)
             {
                 foreach (var item in container.Items)
@@ -463,18 +424,18 @@ namespace Oxide.Plugins
             
             SaveConfig();
 
-            if (!_config.Enabled)
-            {
-                PrintWarning("WARNING! Plugin is disabled in configuration");
-                Interface.Oxide.UnloadPlugin(Name);
-                return;
-            }
-
             AddCovalenceCommand(_config.LootSaveCommand, nameof(CommandLootSave));
             AddCovalenceCommand(_config.LootRefillCommand, nameof(CommandLootRefill));
             AddCovalenceCommand(_config.LoadConfigCommand, nameof(CommandLoadConfig));
 
+
             _initialized = true;
+            
+            if (!_config.RefillOnLoad)
+            {
+                PrintWarning("Loot refill on plugin load is disabled in configuration");
+                return;
+            }
 
             NextFrame(LootRefill);
         }
@@ -615,8 +576,8 @@ namespace Oxide.Plugins
                     $"Handling container {networkable.ShortPrefabName} ({networkable.net.ID} @ {networkable.transform.position})");
             }
 
-            if (_config.ShuffleItems && !container.ModifyItems) // No need to shuffle for items modification
-                container.Items?.Shuffle();
+            if (_config.ShuffleItems && !container.ModifyItems && container.Items != null) // No need to shuffle for items modification
+                Shuffle(container.Items);
 
             inventory.capacity = inventory.itemList.Count;
             
@@ -894,23 +855,20 @@ namespace Oxide.Plugins
 
             return string.Empty;
         }
-        
-        #endregion
-    }
-    
-    public static class Extensions
-    {
-        public static void Shuffle<T>(this IList<T> list)
+
+        private static void Shuffle<T>(IList<T> list)
         {
             var count = list.Count;
             while (count > 1)
             {
                 count--;
-                var index = LootPlus.Ins.Random.Next(count + 1);
+                var index = Ins.Random.Next(count + 1);
                 var value = list[index];
                 list[index] = list[count];
                 list[count] = value;
             }
         }
+        
+        #endregion
     }
 }

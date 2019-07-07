@@ -13,7 +13,7 @@ using Time = Oxide.Core.Libraries.Time;
 
 namespace Oxide.Plugins
 {
-    [Info("Smart Chat Bot", "Iv Misticos", "2.0.8")]
+    [Info("Smart Chat Bot", "Iv Misticos", "2.0.9")]
     [Description("I send chat messages based on some triggers or time.")]
     class SmartChatBot : RustPlugin
     {
@@ -216,15 +216,13 @@ namespace Oxide.Plugins
             if (!ConvertToSeconds(_config.Cooldown, out _config.ParsedCooldown))
             {
                 PrintError($"Unable to convert \"{_config.Cooldown}\" to seconds!");
-                Interface.GetMod().UnloadPlugin(Name);
-                return;
+                _config.ParsedCooldown = 0;
             }
 
             if (!ConvertToSeconds(_config.CooldownGlobal, out _config.ParsedCooldownGlobal))
             {
                 PrintError($"Unable to convert \"{_config.CooldownGlobal}\" to seconds!");
-                Interface.GetMod().UnloadPlugin(Name);
-                return;
+                _config.ParsedCooldownGlobal = 0;
             }
 
             var messageGroupsCount = _config.AutoMessages.Count;
@@ -237,8 +235,7 @@ namespace Oxide.Plugins
                 if (!ConvertToSeconds(messageGroup.Frequency, out messageGroup.ParsedFrequency))
                 {
                     PrintError($"Unable to convert \"{messageGroup.Frequency}\" to seconds!");
-                    Interface.GetMod().UnloadPlugin(Name);
-                    return;
+                    messageGroup.ParsedFrequency = 60;
                 }
                 
                 // Permissions

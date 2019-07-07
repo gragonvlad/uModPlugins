@@ -921,7 +921,6 @@ namespace Oxide.Plugins
                     offset -= perPage;
                 }
 
-
                 _container.itemList.Remove(source);
                 foreach (var itemMod in source.info.itemMods)
                     itemMod.OnParentChanged(source);
