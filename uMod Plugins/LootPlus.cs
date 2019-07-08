@@ -9,15 +9,13 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Loot Plus", "Iv Misticos", "2.1.3")]
+    [Info("Loot Plus", "Iv Misticos", "2.1.4")]
     [Description("Modify loot on your server.")]
     public class LootPlus : RustPlugin
     {
         #region Variables
 
-        public static LootPlus Ins;
-
-        public Random Random = new Random();
+        private static Random _random = new Random();
 
         private bool _initialized = false;
 
@@ -50,14 +48,14 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Containers", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<ContainerData> Containers = new List<ContainerData> {new ContainerData()};
 
-            [JsonProperty(PropertyName = "Shuffle Items")]
-            public bool ShuffleItems = true;
+            [JsonProperty(PropertyName = "Shuffle Items", NullValueHandling = NullValueHandling.Ignore)]
+            public bool? ShuffleItems = null;
 
-            [JsonProperty(PropertyName = "Allow Duplicate Items")]
-            public bool DuplicateItems = false;
+            [JsonProperty(PropertyName = "Allow Duplicate Items", NullValueHandling = NullValueHandling.Ignore)]
+            public bool? DuplicateItems = null;
 
-            [JsonProperty(PropertyName = "Allow Duplicate Items With Different Skins")]
-            public bool DuplicateItemsDifferentSkins = true;
+            [JsonProperty(PropertyName = "Allow Duplicate Items With Different Skins", NullValueHandling = NullValueHandling.Ignore)]
+            public bool? DuplicateItemsDifferentSkins = null;
 
             [JsonProperty(PropertyName = "Debug")]
             public bool Debug = false;
@@ -73,6 +71,15 @@ namespace Oxide.Plugins
             
             [JsonProperty(PropertyName = "Monument Prefab (Empty To Ignore)")]
             public string Monument = "";
+
+            [JsonProperty(PropertyName = "Shuffle Items")]
+            public bool ShuffleItems = true;
+
+            [JsonProperty(PropertyName = "Allow Duplicate Items")]
+            public bool DuplicateItems = false;
+
+            [JsonProperty(PropertyName = "Allow Duplicate Items With Different Skins")]
+            public bool DuplicateItemsDifferentSkins = true;
             
             [JsonProperty(PropertyName = "Item Container Indexes", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<int> ContainerIndexes = new List<int> {0};
@@ -152,7 +159,7 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Rate")]
             public float Rate = -1f;
 
-            public int? SelectAmount() => Ins?.Random?.Next(MinAmount, MaxAmount + 1);
+            public int SelectAmount() => _random.Next(MinAmount, MaxAmount + 1);
 
             public bool IsValid() => MinAmount > 0 && MaxAmount > 0;
         }
@@ -216,12 +223,7 @@ namespace Oxide.Plugins
                     return null;
                 }
 
-                var random = Ins?.Random?.Next(1, sum1 + 1); // include the sum1 number itself and exclude the 0
-                if (random == null)
-                {
-                    PrintDebug("Random is null");
-                    return null;
-                }
+                var random = _random.Next(1, sum1 + 1); // include the sum1 number itself and exclude the 0
                 
                 PrintDebug($"Selected random: {random}; Sum: {sum1}");
                 
@@ -400,14 +402,19 @@ namespace Oxide.Plugins
 
         private void OnServerInitialized()
         {
-            Ins = this;
-            
             permission.RegisterPermission(PermissionLootSave, this);
             permission.RegisterPermission(PermissionLootRefill, this);
             permission.RegisterPermission(PermissionLoadConfig, this);
 
             foreach (var container in _config.Containers)
             {
+                if (_config.ShuffleItems.HasValue)
+                    container.ShuffleItems = _config.ShuffleItems.Value;
+                if (_config.DuplicateItems.HasValue)
+                    container.DuplicateItems = _config.DuplicateItems.Value;
+                if (_config.DuplicateItemsDifferentSkins.HasValue)
+                    container.DuplicateItemsDifferentSkins = _config.DuplicateItemsDifferentSkins.Value;
+                
                 foreach (var item in container.Items)
                 {
                     foreach (var amount in item.Amount)
@@ -422,12 +429,18 @@ namespace Oxide.Plugins
                 }
             }
             
+            if (_config.ShuffleItems.HasValue)
+                _config.ShuffleItems = null;
+            if (_config.DuplicateItems.HasValue)
+                _config.DuplicateItems = null;
+            if (_config.DuplicateItemsDifferentSkins.HasValue)
+                _config.DuplicateItemsDifferentSkins = null;
+            
             SaveConfig();
 
             AddCovalenceCommand(_config.LootSaveCommand, nameof(CommandLootSave));
             AddCovalenceCommand(_config.LootRefillCommand, nameof(CommandLootRefill));
             AddCovalenceCommand(_config.LoadConfigCommand, nameof(CommandLoadConfig));
-
 
             _initialized = true;
             
@@ -576,7 +589,7 @@ namespace Oxide.Plugins
                     $"Handling container {networkable.ShortPrefabName} ({networkable.net.ID} @ {networkable.transform.position})");
             }
 
-            if (_config.ShuffleItems && !container.ModifyItems && container.Items != null) // No need to shuffle for items modification
+            if (container.ShuffleItems && !container.ModifyItems && container.Items != null) // No need to shuffle for items modification
                 Shuffle(container.Items);
 
             inventory.capacity = inventory.itemList.Count;
@@ -653,9 +666,9 @@ namespace Oxide.Plugins
 
                 var skin = ChanceData.Select(dataItem.Skins)?.Skin ?? 0UL;
 
-                if (!_config.DuplicateItems) // Duplicate items are not allowed
+                if (!container.DuplicateItems) // Duplicate items are not allowed
                 {
-                    if (IsDuplicate(inventory.itemList, dataItem, skin))
+                    if (IsDuplicate(inventory.itemList, container, dataItem, skin))
                     {
                         if (++failures > container.MaxRetries)
                         {
@@ -678,7 +691,7 @@ namespace Oxide.Plugins
 
                 var amount = 1;
                 if (dataAmount.IsValid())
-                    amount = dataAmount.SelectAmount() ?? amount; // :P
+                    amount = dataAmount.SelectAmount();
 
                 if (dataAmount.Rate > 0f)
                     amount = (int) (dataAmount.Rate * amount);
@@ -767,7 +780,7 @@ namespace Oxide.Plugins
 
                     var amount = item.amount;
                     if (dataAmount.IsValid())
-                        amount = dataAmount.SelectAmount() ?? amount; // :P again lol, heh
+                        amount = dataAmount.SelectAmount();
 
                     if (dataAmount.Rate > 0f)
                         amount = (int) (dataAmount.Rate * amount);
@@ -800,7 +813,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private static bool IsDuplicate(IReadOnlyList<Item> list, ItemData dataItem, ulong skin)
+        private static bool IsDuplicate(IReadOnlyList<Item> list, ContainerData container, ItemData dataItem, ulong skin)
         {
             for (var j = 0; j < list.Count; j++)
             {
@@ -814,7 +827,7 @@ namespace Oxide.Plugins
                 }
 
                 if (item.IsBlueprint() || item.info.shortname != dataItem.Shortname) continue;
-                if (_config.DuplicateItemsDifferentSkins && item.skin != skin)
+                if (container.DuplicateItemsDifferentSkins && item.skin != skin)
                     continue;
 
                 PrintDebug("Found a duplicate");
@@ -862,7 +875,7 @@ namespace Oxide.Plugins
             while (count > 1)
             {
                 count--;
-                var index = Ins.Random.Next(count + 1);
+                var index = _random.Next(count + 1);
                 var value = list[index];
                 list[index] = list[count];
                 list[count] = value;
