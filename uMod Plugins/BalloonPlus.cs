@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using Oxide.Core;
-using Oxide.Core.Libraries.Covalence;
 using UnityEngine;
 
 namespace Oxide.Plugins
@@ -11,12 +9,6 @@ namespace Oxide.Plugins
     [Description("Control your balloon's flight")]
     class BalloonPlus : RustPlugin
     {
-        #region Variables
-
-        private static BalloonPlus _ins;
-        
-        #endregion
-        
         #region Cache
         
         private static Dictionary<string, SpeedData> _cachedSpeedData = new Dictionary<string, SpeedData>();
@@ -110,8 +102,6 @@ namespace Oxide.Plugins
 
         private void Init()
         {
-            _ins = this;
-            
             if (!Enum.TryParse(_config.MoveButton, out _config.ParsedMoveButton))
             {
                 PrintError("Unable to parse the moving button");
