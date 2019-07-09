@@ -822,7 +822,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                Owner.GiveItem(item);
+                MoveItem(item, Owner.inventory.containerMain, -1);
                 SetupContent(item);
                 PrintDebug("Gave item back");
             }
@@ -928,7 +928,7 @@ namespace Oxide.Plugins
                 PrintDebug($"Updating content with {page} page");
                 Clear();
                 
-                MoveItem(source, 0);
+                MoveItem(source, _container, 0);
                 DestroyUI();
                 DrawUI(page);
 
@@ -944,7 +944,7 @@ namespace Oxide.Plugins
                     var skin = skins[i];
                     var duplicate = GetDuplicateItem(source, skin);
                     
-                    MoveItem(duplicate, slot++);
+                    MoveItem(duplicate, _container, slot++);
                 }
                 
                 PrintDebug("Changed content");
@@ -955,9 +955,18 @@ namespace Oxide.Plugins
                 PrintDebug($"Getting duplicate for {item.info.shortname}..");
 
                 var duplicate = ItemManager.Create(item.info, item.amount, skin);
-                duplicate._maxCondition = item._maxCondition;
-                duplicate._condition = item._condition;
-                duplicate.contents.capacity = item.contents.capacity;
+                if (item.hasCondition)
+                {
+                    PrintDebug("Setting condition");
+                    duplicate._maxCondition = item._maxCondition;
+                    duplicate._condition = item._condition;
+                }
+
+                if (item.contents != null)
+                {
+                    PrintDebug("Setting contents");
+                    duplicate.contents.capacity = item.contents.capacity;
+                }
 
                 var projectile = item.GetHeldEntity() as BaseProjectile;
                 var projectileDuplicate = duplicate.GetHeldEntity() as BaseProjectile;
@@ -968,15 +977,19 @@ namespace Oxide.Plugins
                 return duplicate;
             }
 
-            private void MoveItem(Item item, int slot)
+            private void MoveItem(Item item, ItemContainer container, int slot)
             {
+                var parent = item.parent;
+                parent?.itemList?.Remove(item);
+
                 item.RemoveFromContainer();
                 item.RemoveFromWorld();
 
                 item.position = slot;
-                item.parent = _container;
+                item.parent = container;
 
-                _container.itemList.Add(item);
+                container.itemList.Add(item);
+                item.MarkDirty();
                     
                 foreach (var mod in item.info.itemMods)
                     mod.OnParentChanged(item);
