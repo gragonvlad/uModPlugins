@@ -1,15 +1,17 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using ConVar;
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using UnityEngine;
+using Physics = UnityEngine.Physics;
 using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Loot Plus", "Iv Misticos", "2.1.4")]
+    [Info("Loot Plus", "Iv Misticos", "2.1.5")]
     [Description("Modify loot on your server.")]
     public class LootPlus : RustPlugin
     {
@@ -65,6 +67,9 @@ namespace Oxide.Plugins
         {
             [JsonProperty(PropertyName = "Entity Shortname")]
             public string Shortname = "entity.shortname";
+
+            [JsonProperty(PropertyName = "Exclude Entities Shortnames")]
+            public List<string> Exclude = new List<string> {"stocking_large_deployed", "stocking_small_deployed"};
             
             [JsonProperty(PropertyName = "API Shortname")]
             public string APIShortname = "";
@@ -119,6 +124,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Allow Stacking")]
             public bool AllowStacking = true;
+
+            [JsonProperty(PropertyName = "Remove Item")]
+            public bool RemoveItem = false;
 
             [JsonProperty(PropertyName = "Conditions", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<ConditionData> Conditions = new List<ConditionData> {new ConditionData()};
@@ -250,6 +258,7 @@ namespace Oxide.Plugins
             {
                 _config = Config.ReadObject<Configuration>();
                 if (_config == null) throw new Exception();
+                SaveConfig();
             }
             catch
             {
@@ -315,8 +324,9 @@ namespace Oxide.Plugins
                 MaxRetries = inventory.itemList.Count * 2
             };
 
-            foreach (var item in inventory.itemList)
+            for (var i = 0; i < inventory.itemList.Count; i++)
             {
+                var item = inventory.itemList[i];
                 var isBlueprint = item.IsBlueprint();
                 var itemData = new ItemData
                 {
@@ -406,29 +416,32 @@ namespace Oxide.Plugins
             permission.RegisterPermission(PermissionLootRefill, this);
             permission.RegisterPermission(PermissionLoadConfig, this);
 
-            foreach (var container in _config.Containers)
+            for (var i = 0; i < _config.Containers.Count; i++)
             {
+                var container = _config.Containers[i];
                 if (_config.ShuffleItems.HasValue)
                     container.ShuffleItems = _config.ShuffleItems.Value;
                 if (_config.DuplicateItems.HasValue)
                     container.DuplicateItems = _config.DuplicateItems.Value;
                 if (_config.DuplicateItemsDifferentSkins.HasValue)
                     container.DuplicateItemsDifferentSkins = _config.DuplicateItemsDifferentSkins.Value;
-                
-                foreach (var item in container.Items)
+
+                for (var j = 0; j < container.Items.Count; j++)
                 {
-                    foreach (var amount in item.Amount)
+                    var item = container.Items[j];
+                    for (var k = 0; k < item.Amount.Count; k++)
                     {
+                        var amount = item.Amount[k];
                         if (!amount.Amount.HasValue)
                             continue;
-                        
+
                         amount.MinAmount = amount.Amount.Value;
                         amount.MaxAmount = amount.Amount.Value;
                         amount.Amount = null;
                     }
                 }
             }
-            
+
             if (_config.ShuffleItems.HasValue)
                 _config.ShuffleItems = null;
             if (_config.DuplicateItems.HasValue)
@@ -459,32 +472,79 @@ namespace Oxide.Plugins
             _initialized = false;
             
             // LOOT IS BACK
-            var containers = UnityEngine.Object.FindObjectsOfType<LootContainer>();
-            var containersCount = containers.Length;
-            for (var i = 0; i < containersCount; i++)
+            using (var entitiesEnumerator = BaseNetworkable.serverEntities.GetEnumerator())
             {
-                var container = containers[i];
-                
-                // Creating an inventory
-                container.CreateInventory(true);
-                
-                // Spawning loot
-                container.SpawnLoot();
-                
-                // Changing the capacity
-                container.inventory.capacity = container.inventory.itemList.Count;
+                while (entitiesEnumerator.MoveNext())
+                {
+                    var entity = entitiesEnumerator.Current;
+                    var lootContainer = entity as LootContainer;
+                    if (lootContainer == null)
+                        continue;
+
+                    if (lootContainer is Stocking && !XMas.enabled)
+                    {
+                        PrintDebug("Stocking entity but XMas is disabled");
+                        continue;
+                    }
+
+                    if (lootContainer.shouldRefreshContents && !lootContainer.IsInvoking(lootContainer.SpawnLoot))
+                    {
+                        PrintDebug("Entity should refresh content but does NOT.");
+                        continue;
+                    }
+
+                    PrintDebug(
+                        $"Restoring loot for {lootContainer.ShortPrefabName}. SRC: {lootContainer.shouldRefreshContents} / II: {lootContainer.IsInvoking(lootContainer.SpawnLoot)}");
+                    
+                    // Creating an inventory
+                    if (lootContainer.inventory == null)
+                    {
+                        lootContainer.CreateInventory(true);
+                    }
+                    else
+                    {
+                        lootContainer.inventory.Clear();
+                        ItemManager.DoRemoves();
+                    }
+
+                    // Spawning loot
+                    lootContainer.SpawnLoot();
+
+                    // Changing the capacity
+                    lootContainer.inventory.capacity = lootContainer.inventory.itemList.Count;
+
+                    // no i wont do anything with npc and other containers >:(
+                }
             }
         }
 
         private void OnEntitySpawned(BaseNetworkable entity)
         {
-            if (!_initialized)
+            var container = entity as LootContainer;
+            if (container != null)
+            {
+                PrintDebug("Entity is a LootContainer. Waiting for OnLootSpawn");
+                return; // So this entity's content is modified in OnLootSpawn
+            }
+            
+            OnLootSpawn(entity);
+        }
+
+        private void OnLootSpawn(BaseNetworkable entity)
+        {
+            if (!_initialized || entity == null)
                 return;
             
             var corpse = entity as LootableCorpse;
             if (corpse != null)
             {
                 PrintDebug($"{entity.ShortPrefabName} is a corpse");
+                if (corpse.containers == null || corpse.containers.Length == 0)
+                {
+                    PrintDebug("Entity has no containers");
+                    return;
+                }
+                
                 for (var i = 0; i < corpse.containers.Length; i++)
                 {
                     var inventory = corpse.containers[i];
@@ -492,12 +552,12 @@ namespace Oxide.Plugins
                 }
             }
 
-            var storageContainer = entity as StorageContainer;
+            var lootContainer = entity as LootContainer;
             // ReSharper disable once InvertIf
-            if (storageContainer != null)
+            if (lootContainer != null)
             {
-                PrintDebug($"{entity.ShortPrefabName} is a storage container");
-                RunLootHandler(entity, storageContainer.inventory, -1);
+                PrintDebug($"{entity.ShortPrefabName} is a loot container");
+                RunLootHandler(entity, lootContainer.inventory, -1);
             }
         }
 
@@ -528,9 +588,9 @@ namespace Oxide.Plugins
         
         #region API
 
-        private void FillContainer(ItemContainer container, string apiShortname)
+        private void FillContainer(ItemContainer container, string apiShortname, int containerIndex = -1)
         {
-            HandleAPIFill(container, apiShortname);
+            HandleAPIFill(container, apiShortname, containerIndex);
         }
         
         #endregion
@@ -552,7 +612,8 @@ namespace Oxide.Plugins
                 var container = _config.Containers[i];
                 if (networkable != null && apiShortname == null)
                 {
-                    if (container.Shortname != "global" && container.Shortname != networkable.ShortPrefabName)
+                    if (container.Shortname != "global" && container.Shortname != networkable.ShortPrefabName ||
+                        container.Exclude.Contains(networkable.ShortPrefabName))
                         continue;
                 }
                 else
@@ -583,31 +644,14 @@ namespace Oxide.Plugins
 
         private IEnumerator HandleInventory(BaseNetworkable networkable, ItemContainer inventory, ContainerData container)
         {
-            if (networkable != null)
-            {
-                PrintDebug(
-                    $"Handling container {networkable.ShortPrefabName} ({networkable.net.ID} @ {networkable.transform.position})");
-            }
-
-            if (container.ShuffleItems && !container.ModifyItems && container.Items != null) // No need to shuffle for items modification
-                Shuffle(container.Items);
-
-            inventory.capacity = inventory.itemList.Count;
+            PrintDebug(
+                $"Handling container. S:{container.Shortname} / API:{container.APIShortname}");
             
             if (!container.Online.IsOkay())
             {
                 PrintDebug("Online check failed");
                 yield break;
             }
-            
-            var dataCapacity = ChanceData.Select(container.Capacity);
-            if (dataCapacity == null)
-            {
-                PrintDebug("Could not select a correct capacity");
-                yield break;
-            }
-            
-            PrintDebug($"Items: {inventory.itemList.Count} / {inventory.capacity}");
 
             if (!((container.AddItems || container.ReplaceItems) ^ container.ModifyItems))
             {
@@ -615,20 +659,35 @@ namespace Oxide.Plugins
                 yield break;
             }
 
-            if (container.ReplaceItems)
+            if (container.ShuffleItems && !container.ModifyItems && container.Items != null) // No need to shuffle for items modification
+                Shuffle(container.Items);
+
+            inventory.capacity = inventory.itemList.Count;
+
+            if (container.ReplaceItems || container.AddItems)
             {
-                inventory.Clear();
-                ItemManager.DoRemoves();
-                inventory.capacity = dataCapacity.Capacity;
-                yield return HandleInventoryAddReplace(inventory, container);
-                yield break;
-            }
-            
-            if (container.AddItems)
-            {
-                inventory.capacity += dataCapacity.Capacity;
-                yield return HandleInventoryAddReplace(inventory, container);
-                yield break;
+                var dataCapacity = ChanceData.Select(container.Capacity);
+                if (dataCapacity == null)
+                {
+                    PrintDebug("Could not select a correct capacity");
+                    yield break;
+                }
+
+                if (container.ReplaceItems)
+                {
+                    inventory.Clear();
+                    ItemManager.DoRemoves();
+                    inventory.capacity = dataCapacity.Capacity;
+                    yield return HandleInventoryAddReplace(inventory, container);
+                    yield break;
+                }
+
+                if (container.AddItems)
+                {
+                    inventory.capacity += dataCapacity.Capacity;
+                    yield return HandleInventoryAddReplace(inventory, container);
+                    yield break;
+                }
             }
 
             if (container.ModifyItems)
@@ -637,11 +696,11 @@ namespace Oxide.Plugins
             }
         }
 
-        private void HandleAPIFill(ItemContainer container, string apiShortname)
+        private void HandleAPIFill(ItemContainer container, string apiShortname, int containerIndex)
         {
             PrintDebug($"Handling API fill with API Shortname: {apiShortname}");
             // ReSharper disable once IteratorMethodResultIsIgnored
-            LootHandler(null, container, 0, apiShortname);
+            LootHandler(null, container, -1, apiShortname);
         }
 
         private static IEnumerator HandleInventoryAddReplace(ItemContainer inventory, ContainerData container)
@@ -752,7 +811,8 @@ namespace Oxide.Plugins
         {
             PrintDebug("Using modify");
             
-            for (var i = 0; i < inventory.itemList.Count; i++)
+            // Reversed, because an item can be removed.
+            for (var i = inventory.itemList.Count - 1; i >= 0; i--)
             {
                 var item = inventory.itemList[i];
                 for (var j = 0; j < container.Items.Count; j++)
@@ -766,6 +826,13 @@ namespace Oxide.Plugins
 
                     PrintDebug(
                         $"Handling item {dataItem.Shortname} (Blueprint: {dataItem.IsBlueprint} / Stacking: {dataItem.AllowStacking})");
+
+                    if (dataItem.RemoveItem)
+                    {
+                        PrintDebug("Removing item");
+                        item.DoRemove();
+                        break;
+                    }
 
                     var skin = ChanceData.Select(dataItem.Skins)?.Skin;
                     if (skin.HasValue)
@@ -859,8 +926,9 @@ namespace Oxide.Plugins
         private string GetMonumentName(Vector3 position)
         {
             var monuments = TerrainMeta.Path.Monuments;
-            foreach (var monument in monuments)
+            for (var i = 0; i < monuments.Count; i++)
             {
+                var monument = monuments[i];
                 var obb = new OBB(monument.transform.position, Quaternion.identity, monument.Bounds);
                 if (obb.Contains(position))
                     return monument.name;

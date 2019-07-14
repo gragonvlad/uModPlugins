@@ -11,8 +11,8 @@ namespace Oxide.Plugins
     class DeveloperTools : RustPlugin
     {
         #region Variables
-        
-        List<Item> createdItems = new List<Item>();
+
+        private List<Item> _createdItems = new List<Item>();
         
         #endregion
         
@@ -215,17 +215,17 @@ namespace Oxide.Plugins
             player.Reply("Started creating");
             for (var i = 0; i < amount; i++)
             {
-                createdItems.Add(ItemManager.Create(itemDef));
+                _createdItems.Add(ItemManager.Create(itemDef));
             }
 
             player.Reply($"Created {amount} items with shortname {args[0]}");
-            player.Reply($"Total created items: {createdItems.Count}");
+            player.Reply($"Total created items: {_createdItems.Count}");
         }
 
         private void CommandClearItems(IPlayer player, string command, string[] args)
         {
-            createdItems.Clear();
-            createdItems = new List<Item>();
+            _createdItems.Clear();
+            _createdItems = new List<Item>();
         }
 
         private void CommandRunGC(IPlayer player, string command, string[] args)
