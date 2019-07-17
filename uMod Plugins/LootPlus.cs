@@ -68,7 +68,7 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Entity Shortname")]
             public string Shortname = "entity.shortname";
 
-            [JsonProperty(PropertyName = "Exclude Entities Shortnames")]
+            [JsonProperty(PropertyName = "Exclude Entities Shortnames", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<string> Exclude = new List<string> {"stocking_large_deployed", "stocking_small_deployed"};
             
             [JsonProperty(PropertyName = "API Shortname")]
