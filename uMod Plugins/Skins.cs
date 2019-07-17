@@ -232,12 +232,18 @@ namespace Oxide.Plugins
 
         private void OnPlayerInit(BasePlayer player)
         {
+            if (ContainerController.FindIndex(player) != -1)
+                return;
+            
             _controllers.Add(new ContainerController(player)); // lol
         }
 
         private void OnPlayerDisconnected(BasePlayer player)
         {
             var index = ContainerController.FindIndex(player);
+            if (index == -1)
+                return;
+            
             var container = _controllers[index];
             container.Destroy();
             

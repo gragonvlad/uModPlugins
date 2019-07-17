@@ -1,4 +1,5 @@
-using System.Collections.Generic; 
+using System.Collections.Generic;
+using System.Linq;
 using Network;
 using UnityEngine;
 
@@ -91,7 +92,7 @@ namespace Oxide.Plugins
             Net.sv.write.BytesWithSize(data);
             
             var connections = GetListeningConnections();
-            Net.sv.write.Send(new SendInfo(connections)
+            Net.sv.write.Send(new SendInfo(connections.ToList())
             {
                 priority = Priority.Immediate
             });
