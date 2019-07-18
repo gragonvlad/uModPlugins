@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Limited Admin", "Iv Misticos", "1.0.4")]
+    [Info("Limited Admin", "Iv Misticos", "1.0.5")]
     [Description("Prevents admin abuse by blocking actions and commands")]
     class LimitedAdmin : RustPlugin
     {
@@ -225,8 +225,9 @@ namespace Oxide.Plugins
 
             if (_config.CanInteractTurret)
             {
-                Unsubscribe(nameof(OnLiftUse));
-                Unsubscribe(nameof(OnLiftUse));
+                Unsubscribe(nameof(OnTurretAuthorize));
+                Unsubscribe(nameof(OnTurretDeauthorize));
+                Unsubscribe(nameof(OnTurretClearList));
             }
 
             if (_config.CanGather)
