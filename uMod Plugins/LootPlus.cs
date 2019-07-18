@@ -11,7 +11,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Loot Plus", "Iv Misticos", "2.1.5")]
+    [Info("Loot Plus", "Iv Misticos", "2.1.6")]
     [Description("Modify loot on your server.")]
     public class LootPlus : RustPlugin
     {
@@ -36,7 +36,7 @@ namespace Oxide.Plugins
         private class Configuration
         {
             [JsonProperty(PropertyName = "Refill Loot On Plugin Load")]
-            public bool RefillOnLoad = false;
+            public bool RefillOnLoad = true;
             
             [JsonProperty(PropertyName = "Container Loot Save Command")]
             public string LootSaveCommand = "lootsave";
