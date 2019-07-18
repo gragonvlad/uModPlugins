@@ -28,6 +28,9 @@ namespace Oxide.Plugins
 
         private class Configuration
         {
+            [JsonProperty(PropertyName = "Workshop", NullValueHandling = NullValueHandling.Ignore)]
+            public Dictionary<string, List<ulong>> OldSkins = null;
+
             [JsonProperty(PropertyName = "Command")]
             public string Command = "skin";
 
@@ -206,17 +209,39 @@ namespace Oxide.Plugins
             }, this);
         }
 
-        private void OnServerInitialized()
+        private void Init()
         {
             permission.RegisterPermission(PermissionUse, this);
             permission.RegisterPermission(PermissionAdmin, this);
 
-            AddCovalenceCommand(_config.Command, nameof(CommandSkin));
-
-            foreach (var player in BasePlayer.activePlayerList)
+            if (_config.OldSkins == null)
+                return;
+            
+            foreach (var kvp in _config.OldSkins)
             {
+                var skinItem = Configuration.SkinItem.Find(kvp.Key);
+                if (skinItem == null)
+                {
+                    _config.Skins.Add(new Configuration.SkinItem {Shortname = kvp.Key, Skins = kvp.Value});
+                    continue;
+                }
+                
+                skinItem.Skins.AddRange(kvp.Value);
+            }
+
+            _config.OldSkins = null;
+            SaveConfig();
+        }
+
+        private void OnServerInitialized()
+        {
+            for (var i = 0; i < BasePlayer.activePlayerList.Count; i++)
+            {
+                var player = BasePlayer.activePlayerList[i];
                 OnPlayerInit(player);
             }
+
+            AddCovalenceCommand(_config.Command, nameof(CommandSkin));
         }
 
         private void Unload()
@@ -228,6 +253,9 @@ namespace Oxide.Plugins
                 
                 _controllers.RemoveAt(i);
             }
+
+            _controllers = null;
+            _config = null;
         }
 
         private void OnPlayerInit(BasePlayer player)
@@ -928,9 +956,12 @@ namespace Oxide.Plugins
                 }
 
                 _container.itemList.Remove(source);
-                foreach (var itemMod in source.info.itemMods)
+                for (var i = 0; i < source.info.itemMods.Length; i++)
+                {
+                    var itemMod = source.info.itemMods[i];
                     itemMod.OnParentChanged(source);
-                
+                }
+
                 PrintDebug($"Updating content with {page} page");
                 Clear();
                 
@@ -996,9 +1027,12 @@ namespace Oxide.Plugins
 
                 container.itemList.Add(item);
                 item.MarkDirty();
-                    
-                foreach (var mod in item.info.itemMods)
+
+                for (var i = 0; i < item.info.itemMods.Length; i++)
+                {
+                    var mod = item.info.itemMods[i];
                     mod.OnParentChanged(item);
+                }
             }
 
             private void RemoveItem(Item item)
@@ -1011,9 +1045,12 @@ namespace Oxide.Plugins
                 
                 if (item.contents != null)
                 {
-                    foreach (var content in item.contents.itemList)
+                    for (var i = 0; i < item.contents.itemList.Count; i++)
+                    {
+                        var content = item.contents.itemList[i];
                         RemoveItem(content);
-                    
+                    }
+
                     item.contents = null;
                 }
                 
