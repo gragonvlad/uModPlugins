@@ -11,7 +11,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Loot Plus", "Iv Misticos", "2.1.6")]
+    [Info("Loot Plus", "Iv Misticos", "2.1.7")]
     [Description("Modify loot on your server.")]
     public class LootPlus : RustPlugin
     {
@@ -82,6 +82,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Allow Duplicate Items")]
             public bool DuplicateItems = false;
+
+            [JsonProperty(PropertyName = "Remove Container")]
+            public bool RemoveContainer = false;
 
             [JsonProperty(PropertyName = "Allow Duplicate Items With Different Skins")]
             public bool DuplicateItemsDifferentSkins = true;
@@ -646,6 +649,18 @@ namespace Oxide.Plugins
         {
             PrintDebug(
                 $"Handling container. S:{container.Shortname} / API:{container.APIShortname}");
+
+            if (container.RemoveContainer)
+            {
+                PrintDebug("Removing container in next frame");
+                NextFrame(() =>
+                {
+                    if (networkable != null && !networkable.IsDestroyed)
+                        networkable.Kill();
+                });
+                
+                yield break;
+            }
             
             if (!container.Online.IsOkay())
             {
