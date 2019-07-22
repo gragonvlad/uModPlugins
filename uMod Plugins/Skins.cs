@@ -41,7 +41,7 @@ namespace Oxide.Plugins
             public string Panel = "generic";
 
             [JsonProperty(PropertyName = "Container Capacity")]
-            public int Capacity = 42;
+            public int Capacity = 36;
 
             [JsonProperty(PropertyName = "UI")]
             public UIConfiguration UI = new UIConfiguration();
