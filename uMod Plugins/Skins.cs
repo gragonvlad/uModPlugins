@@ -811,6 +811,9 @@ namespace Oxide.Plugins
             public void Show()
             {
                 PrintDebug("Started container Show");
+
+                if (!CanUse())
+                    return;
                 
                 IsOpened = true;
                 UpdateContent(0);
@@ -929,6 +932,12 @@ namespace Oxide.Plugins
                     PrintDebug("Invalid container");
                     return;
                 }
+
+                if (!CanUse())
+                {
+                    Close();
+                    return;
+                }
                 
                 var source = _container.GetSlot(0);
                 if (source == null)
@@ -985,6 +994,20 @@ namespace Oxide.Plugins
                 
                 PrintDebug("Changed content");
             }
+
+            private bool IsValid() => Owner == null || _container?.itemList != null;
+
+            private bool CanUse()
+            {
+                var result = Interface.CallHook("CanUseSkins", Owner.IPlayer.Id);
+                if (!(result is bool))
+                    return true;
+                
+                PrintDebug($"Hook result: {result}");
+                return (bool) result;
+            }
+            
+            #region Working with items
 
             private Item GetDuplicateItem(Item item, ulong skin)
             {
@@ -1065,8 +1088,8 @@ namespace Oxide.Plugins
                 if (heldEntity != null && heldEntity.IsValid())
                     heldEntity.Kill();
             }
-
-            private bool IsValid() => Owner == null || _container?.itemList != null;
+            
+            #endregion
         }
         
         #endregion
