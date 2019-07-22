@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
+using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -362,6 +363,15 @@ namespace Oxide.Plugins
         }
 
         #endregion
+
+        [HookMethod(nameof(SkinsClose))]
+        private void SkinsClose(BasePlayer player)
+        {
+            if (player == null)
+                return;
+            
+            ContainerController.Find(player)?.Close();
+        }
         
         #endregion
 
@@ -930,12 +940,6 @@ namespace Oxide.Plugins
                 if (!IsValid())
                 {
                     PrintDebug("Invalid container");
-                    return;
-                }
-
-                if (!CanUse())
-                {
-                    Close();
                     return;
                 }
                 
