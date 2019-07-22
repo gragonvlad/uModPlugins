@@ -83,11 +83,11 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Allow Duplicate Items")]
             public bool DuplicateItems = false;
 
-            [JsonProperty(PropertyName = "Remove Container")]
-            public bool RemoveContainer = false;
-
             [JsonProperty(PropertyName = "Allow Duplicate Items With Different Skins")]
             public bool DuplicateItemsDifferentSkins = true;
+
+            [JsonProperty(PropertyName = "Remove Container")]
+            public bool RemoveContainer = false;
             
             [JsonProperty(PropertyName = "Item Container Indexes", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<int> ContainerIndexes = new List<int> {0};
@@ -650,6 +650,7 @@ namespace Oxide.Plugins
             PrintDebug(
                 $"Handling container. S:{container.Shortname} / API:{container.APIShortname}");
 
+            // TODO: Handle on spawn if configured, so not on Loot Spawn if possible.
             if (container.RemoveContainer)
             {
                 PrintDebug("Removing container in next frame");

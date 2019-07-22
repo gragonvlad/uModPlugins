@@ -15,7 +15,7 @@ namespace Oxide.Plugins
     {
         #region Variables
         
-        private static List<ContainerController> _controllers = new List<ContainerController>();
+        private static List<ContainerController> _controllers;
 
         private const string PermissionUse = "skins.use";
         private const string PermissionAdmin = "skins.admin";
@@ -195,17 +195,14 @@ namespace Oxide.Plugins
                                 "skin show - Show skins\n" +
                                 "skin get - Get Skin ID of the item\n" +
                                 "skin remove (Shortname) (Skin ID) - Remove a skin\n" +
-                                "skin add (Shortname) (Skin ID) - Add a skin\n" +
-                                "skin validate - Validate skins" },
+                                "skin add (Shortname) (Skin ID) - Add a skin" },
                 { "Skin Get Format", "{shortname}'s skin: {id}" },
                 { "Skin Get No Item", "Please, hold the needed item" },
                 { "Incorrect Skin", "You have entered an incorrect skin" },
                 { "Skin Already Exists", "This skin already exists on this item" },
                 { "Skin Does Not Exist", "This skin does not exist" },
                 { "Skin Added", "Skin was successfully added" },
-                { "Skin Removed", "Skin was removed" },
-                { "Validation: Started", "Validating skins.." },
-                { "Validation: Ended", "Invalid skins removed: {removed}" }
+                { "Skin Removed", "Skin was removed" }
             }, this);
         }
 
@@ -213,6 +210,8 @@ namespace Oxide.Plugins
         {
             permission.RegisterPermission(PermissionUse, this);
             permission.RegisterPermission(PermissionAdmin, this);
+            
+            _controllers = new List<ContainerController>();
 
             if (_config.OldSkins == null)
                 return;
@@ -452,7 +451,7 @@ namespace Oxide.Plugins
                     var skinData = Configuration.SkinItem.Find(shortname);
                     if (skinData == null)
                     {
-                        skinData = new Configuration.SkinItem();
+                        skinData = new Configuration.SkinItem {Shortname = shortname};
                         _config.Skins.Add(skinData);
                     }
 
