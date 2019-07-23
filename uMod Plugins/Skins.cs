@@ -11,7 +11,7 @@ using Object = UnityEngine.Object;
 namespace Oxide.Plugins
 {
     [Info("Skins", "Iv Misticos", "2.0.0")]
-    [Description("Allow players to change items skin with the skin from steam workshop.")]
+    [Description("Change workshop skins of items easily")]
     class Skins : RustPlugin
     {
         #region Variables
