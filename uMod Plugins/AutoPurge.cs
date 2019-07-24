@@ -4,11 +4,12 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using Oxide.Core;
-using Oxide.Core.Libraries;
+using Oxide.Core.Libraries.Covalence;
+using Time = Oxide.Core.Libraries.Time;
 
 namespace Oxide.Plugins
 {
-    [Info("Auto Purge", "misticos", "2.0.2")]
+    [Info("Auto Purge", "misticos", "2.0.3")]
     [Description("Remove entities if the owner becomes inactive")]
     public class AutoPurge : RustPlugin
     {
@@ -149,6 +150,16 @@ namespace Oxide.Plugins
 	    
         #region Hooks
 
+        protected override void LoadDefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+                { "No Permission", "You don't have enough permissions" },
+                { "Purge Started", "Purge has started. Objects on the map: {objects}" },
+                { "Purge Ended", "Purge just ended. Objects on the map: {objects}" }
+            }, this);
+        }
+
         private void Init()
         {
             _ins = this;
@@ -173,6 +184,8 @@ namespace Oxide.Plugins
                 if (isNoPurge)
                     purge.NoPurge = true;
             }
+
+            AddCovalenceCommand("autopurge.run", nameof(CommandRun));
         }
 
         private void OnServerInitialized()
@@ -193,6 +206,28 @@ namespace Oxide.Plugins
             _ins = null;
         }
 	    
+        #endregion
+        
+        #region Commands
+
+        private void CommandRun(IPlayer player, string command, string[] args)
+        {
+            if (!player.IsAdmin)
+            {
+                player.Reply(GetMsg("No Permission", player.Id));
+                return;
+            }
+
+            player.Reply(GetMsg("Purge Started", player.Id)
+                .Replace("{objects}", BaseNetworkable.serverEntities.Count.ToString()));
+            
+            // ReSharper disable once IteratorMethodResultIsIgnored
+            RunPurgeEnumerator();
+
+            player.Reply(GetMsg("Purge Ended", player.Id)
+                .Replace("{objects}", BaseNetworkable.serverEntities.Count.ToString()));
+        }
+        
         #endregion
 
         #region Last Seen
@@ -315,6 +350,12 @@ namespace Oxide.Plugins
             return true;
         }
         
+        #endregion
+        
+        #region Helpers
+
+        private string GetMsg(string key, string userId) => lang.GetMessage(key, this, userId);
+
         #endregion
     }
 }
