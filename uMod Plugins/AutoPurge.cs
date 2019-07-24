@@ -8,7 +8,7 @@ using Oxide.Core.Libraries;
 
 namespace Oxide.Plugins
 {
-    [Info("Auto Purge", "misticos", "2.0.1")]
+    [Info("Auto Purge", "misticos", "2.0.2")]
     [Description("Remove entities if the owner becomes inactive")]
     public class AutoPurge : RustPlugin
     {
@@ -17,6 +17,9 @@ namespace Oxide.Plugins
         private Time _time = GetLibrary<Time>();
 
         private static AutoPurge _ins;
+
+        private Timer _timerLastSeen;
+        private Timer _timerPurge;
 	    
         #endregion
 
@@ -174,15 +177,15 @@ namespace Oxide.Plugins
 
         private void OnServerInitialized()
         {
-            ServerMgr.Instance.InvokeRepeating(UpdateLastSeen, 0f, _config.LastSeenFrequency);
-            ServerMgr.Instance.InvokeRepeating(RunPurge, 1f, _config.PurgeFrequency);
+            _timerLastSeen = timer.Every(_config.LastSeenFrequency, UpdateLastSeen);
+            _timerPurge = timer.Every(_config.PurgeFrequency, RunPurge);
         }
 
         private void Unload()
         {
-            ServerMgr.Instance.CancelInvoke(RunPurge);
-            ServerMgr.Instance.CancelInvoke(UpdateLastSeen);
-
+            _timerLastSeen?.Destroy();
+            _timerPurge?.Destroy();
+            
             SaveData();
 		    
             _config = null;
@@ -191,7 +194,7 @@ namespace Oxide.Plugins
         }
 	    
         #endregion
-        
+
         #region Last Seen
 
         private void UpdateLastSeen()
