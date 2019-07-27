@@ -182,7 +182,7 @@ namespace Oxide.Plugins
         public class RadPlayerController : MonoBehaviour
         {
             public BasePlayer player;
-            public uint TimeSinceInDanger = 0;
+            public uint timeSinceInDanger = 0;
 
             public void Awake()
             {
@@ -190,22 +190,21 @@ namespace Oxide.Plugins
                 InvokeRepeating(nameof(GiveRadiation), 1f, 1f);
             }
 
-            public bool UnderEntity() => Physics.Raycast(player.eyes.transform.position, Vector3.up, EntMask);
+            public bool IsUnderEntity() =>
+                Physics.Raycast(player.eyes.transform.position, Vector3.up, float.PositiveInfinity, EntMask);
 
             public void GiveRadiation()
             {
-                if (RadiationEnabled && !UnderEntity())
+                if (RadiationEnabled && !IsUnderEntity())
                 {
-                    TimeSinceInDanger++;
-                    player.metabolism.radiation_poison.SetValue(_config.Radiation * TimeSinceInDanger);
-                    player.metabolism.radiation_level.SetValue(_config.Radiation * TimeSinceInDanger);
+                    timeSinceInDanger++;
+                    player.metabolism.radiation_poison.SetValue(_config.Radiation * timeSinceInDanger);
+                    player.metabolism.radiation_level.SetValue(_config.Radiation * timeSinceInDanger);
                 }
                 else
                 {
-                    TimeSinceInDanger = 0;
+                    timeSinceInDanger = 0;
                 }
-
-//                player.metabolism.poison.Increase(_config.Radiation * TimeSinceInDanger);
             }
         }
         
