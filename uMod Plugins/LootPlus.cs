@@ -12,7 +12,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Loot Plus", "Iv Misticos", "2.2.0")]
+    [Info("Loot Plus", "Iv Misticos", "2.2.1")]
     [Description("Modify loot on your server.")]
     public class LootPlus : RustPlugin
     {
@@ -202,6 +202,12 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Allow Stacking")]
             public bool AllowStacking = true;
 
+            [JsonProperty(PropertyName = "Ignore Max Stack")]
+            public bool IgnoreStack = true;
+
+            [JsonProperty(PropertyName = "Ignore Max Condition")]
+            public bool IgnoreCondition = true;
+
             [JsonProperty(PropertyName = "Remove Item")]
             public bool RemoveItem = false;
 
@@ -264,8 +270,38 @@ namespace Oxide.Plugins
 
         private class ConditionData : ChanceData
         {
-            [JsonProperty(PropertyName = "Condition")]
-            public float Condition = 100f;
+            [JsonProperty(PropertyName = "Condition", NullValueHandling = NullValueHandling.Ignore)]
+            public float? Condition = null;
+            
+            [JsonProperty(PropertyName = "Minimal Condition")]
+            public float MinCondition = 75f;
+            
+            [JsonProperty(PropertyName = "Maximal Condition")]
+            public float MaxCondition = 100f;
+            
+            [JsonProperty(PropertyName = "Max Condition Of Item")]
+            public float MaxItemCondition = -1f;
+            
+            [JsonProperty(PropertyName = "Condition Rate")]
+            public float ConditionRate = -1f;
+            
+            [JsonProperty(PropertyName = "Max Condition Rate")]
+            public float MaxItemConditionRate = -1f;
+
+            public void Modify(ref float condition, ref float maxCondition)
+            {
+                if (MaxItemCondition > 0f)
+                    maxCondition = MaxItemCondition;
+
+                if (MaxItemConditionRate > 0f)
+                    maxCondition *= MaxItemConditionRate;
+                
+                if (MinCondition > 0 && MaxCondition > 0)
+                    condition = (float) (_random.NextDouble() * (MaxCondition - MinCondition) + MinCondition);
+
+                if (ConditionRate > 0f)
+                    condition *= ConditionRate;
+            }
         }
 
         private class SkinData : ChanceData
@@ -289,9 +325,14 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Rate")]
             public float Rate = -1f;
 
-            public int SelectAmount() => _random.Next(MinAmount, MaxAmount + 1);
+            public void Modify(ref int amount)
+            {
+                if (MinAmount > 0 && MaxAmount > 0)
+                    amount = _random.Next(MinAmount, MaxAmount + 1);
 
-            public bool IsValid() => MinAmount > 0 && MaxAmount > 0;
+                if (Rate > 0)
+                    amount = (int) (amount * Rate);
+            }
         }
 
         private class CapacityData : ChanceData
@@ -461,7 +502,8 @@ namespace Oxide.Plugins
                     {
                         new AmountData
                         {
-                            Amount = item.amount
+                            MinAmount = item.amount,
+                            MaxAmount = item.amount
                         }
                     },
                     Conditions = new List<ConditionData>(),
@@ -483,7 +525,9 @@ namespace Oxide.Plugins
                     if (item.hasCondition)
                         itemData.Conditions.Add(new ConditionData
                         {
-                            Condition = item.condition
+                            MinCondition = item.condition,
+                            MaxCondition = item.condition,
+                            MaxItemCondition = item.maxCondition
                         });
                 }
 
@@ -627,6 +671,17 @@ namespace Oxide.Plugins
                         amount.MinAmount = amount.Amount.Value;
                         amount.MaxAmount = amount.Amount.Value;
                         amount.Amount = null;
+                    }
+
+                    for (var k = 0; k < item.Conditions.Count; k++)
+                    {
+                        var condition = item.Conditions[k];
+                        if (!condition.Condition.HasValue)
+                            continue;
+
+                        condition.MinCondition = condition.Condition.Value;
+                        condition.MaxCondition = condition.Condition.Value;
+                        condition.Condition = null;
                     }
 
                     for (var k = 0; k < item.Shortnames.Count; k++)
@@ -908,7 +963,7 @@ namespace Oxide.Plugins
         {
             PrintDebug($"Handling API fill with API Shortname: {apiShortname}");
             // ReSharper disable once IteratorMethodResultIsIgnored
-            LootHandler(null, container, -1, apiShortname);
+            LootHandler(null, container, containerIndex, apiShortname);
         }
 
         private static IEnumerator HandleInventoryAddReplace(ItemContainer inventory, ContainerData container)
@@ -957,13 +1012,7 @@ namespace Oxide.Plugins
                 }
 
                 var amount = 1;
-                if (dataAmount.IsValid())
-                    amount = dataAmount.SelectAmount();
-
-                if (dataAmount.Rate > 0f)
-                    amount = (int) (dataAmount.Rate * amount);
-                
-                PrintDebug($"Creating with amount: {amount} (Amount: {dataAmount.Amount} / Rate: {dataAmount.Rate})");
+                dataAmount.Modify(ref amount);
 
                 var definition =
                     ItemManager.FindItemDefinition(dataItem.IsBlueprint ? "blueprintbase" : dataItem.Shortname);
@@ -973,7 +1022,10 @@ namespace Oxide.Plugins
                     continue;
                 }
 
-                var createdItem = ItemManager.Create(definition, amount, skin);
+                var stack = dataItem.IgnoreStack ? amount : Math.Min(amount, definition.stackable);
+                PrintDebug($"Creating with amount: {stack} ({amount})");
+                
+                var createdItem = ItemManager.Create(definition, stack, skin);
                 if (createdItem == null)
                 {
                     PrintDebug("Could not create an item");
@@ -995,8 +1047,10 @@ namespace Oxide.Plugins
                         }
                         else
                         {
-                            PrintDebug($"Selected condition: {dataCondition.Condition}");
-                            createdItem.condition = dataCondition.Condition;
+                            dataCondition.Modify(ref createdItem._condition, ref createdItem._maxCondition);
+                            
+                            if (!dataItem.IgnoreCondition)
+                                createdItem._condition = Math.Min(createdItem._condition, createdItem._maxCondition);
                         }
                     }
                     else if (dataCondition != null)
@@ -1053,16 +1107,12 @@ namespace Oxide.Plugins
                     }
 
                     var amount = item.amount;
-                    if (dataAmount.IsValid())
-                        amount = dataAmount.SelectAmount();
+                    dataAmount.Modify(ref amount);
 
-                    if (dataAmount.Rate > 0f)
-                        amount = (int) (dataAmount.Rate * amount);
-                    
-                    PrintDebug($"Selected amount: {amount} (Amount: {dataAmount.Amount} / Rate: {dataAmount.Rate})");
+                    var stack = dataItem.IgnoreStack ? amount : Math.Min(amount, item.info.stackable);
+                    PrintDebug($"Changing to amount {stack} ({amount})");
 
-                    item.amount = amount;
-
+                    item.amount = stack;
                     var dataCondition = ChanceData.Select(dataItem.Conditions);
                     if (item.hasCondition)
                     {
@@ -1072,8 +1122,10 @@ namespace Oxide.Plugins
                         }
                         else
                         {
-                            PrintDebug($"Selected condition: {dataCondition.Condition}");
-                            item.condition = dataCondition.Condition;
+                            dataCondition.Modify(ref item._condition, ref item._maxCondition);
+                            
+                            if (!dataItem.IgnoreCondition)
+                                item._condition = Math.Min(item._condition, item._maxCondition);
                         }
                     }
                     else if (dataCondition != null)
