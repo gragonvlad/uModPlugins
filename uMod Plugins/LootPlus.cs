@@ -75,7 +75,7 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Entity Shortname", NullValueHandling = NullValueHandling.Ignore)]
             public string Shortname = null;
 
-            [JsonProperty(PropertyName = "Entity Shortnames")]
+            [JsonProperty(PropertyName = "Entity Shortnames", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<ShortnameData> Shortnames = new List<ShortnameData>
             {
                 new ShortnameData()
@@ -187,7 +187,7 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Item Shortname")]
             public string Shortname = "item.shortname";
 
-            [JsonProperty(PropertyName = "Item Shortnames")]
+            [JsonProperty(PropertyName = "Item Shortnames", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<ShortnameData> Shortnames = new List<ShortnameData>
             {
                 new ShortnameData()
@@ -237,7 +237,7 @@ namespace Oxide.Plugins
             public class ShortnameData
             {
                 [JsonProperty(PropertyName = "Shortname")]
-                public string Shortname = "entity.shortname";
+                public string Shortname = "item.shortname";
             
                 [JsonProperty(PropertyName = "Enable Regex")]
                 public bool Regex = false;
@@ -546,14 +546,17 @@ namespace Oxide.Plugins
             for (var i = 0; i < _config.Containers.Count; i++)
             {
                 var container = _config.Containers[i];
+                
                 if (_config.ShuffleItems.HasValue)
                     container.ShuffleItems = _config.ShuffleItems.Value;
+                
                 if (_config.DuplicateItems.HasValue)
                     container.DuplicateItems = _config.DuplicateItems.Value;
+                
                 if (_config.DuplicateItemsDifferentSkins.HasValue)
                     container.DuplicateItemsDifferentSkins = _config.DuplicateItemsDifferentSkins.Value;
 
-                if (!string.IsNullOrEmpty(container.Shortname))
+                if (container.Shortname != null)
                 {
                     container.Shortnames.Add(new ContainerData.ShortnameData
                     {
@@ -565,7 +568,7 @@ namespace Oxide.Plugins
                     container.Shortname = null;
                 }
 
-                if (container.Exclude.Count > 0)
+                if (container.Exclude != null && container.Exclude.Count > 0)
                 {
                     for (var j = 0; j < container.Exclude.Count; j++)
                     {
@@ -581,7 +584,7 @@ namespace Oxide.Plugins
                     container.Exclude = null;
                 }
 
-                if (!string.IsNullOrEmpty(container.APIShortname))
+                if (container.APIShortname != null)
                 {
                     container.Shortnames.Add(new ContainerData.ShortnameData
                     {
@@ -594,7 +597,7 @@ namespace Oxide.Plugins
                     container.APIShortname = null;
                 }
 
-                if (!string.IsNullOrEmpty(container.Monument))
+                if (container.Monument != null)
                 {
                     container.Monuments.Add(container.Monument);
                     container.Monument = null;
@@ -612,7 +615,7 @@ namespace Oxide.Plugins
                             Regex = false
                         });
 
-                        item.Shortname = null;
+                        item.Shortname = string.Empty;
                     }
                     
                     for (var k = 0; k < item.Amount.Count; k++)
