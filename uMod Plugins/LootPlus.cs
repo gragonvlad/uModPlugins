@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using ConVar;
 using Newtonsoft.Json;
 using Oxide.Core;
@@ -11,7 +12,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Loot Plus", "Iv Misticos", "2.1.7")]
+    [Info("Loot Plus", "Iv Misticos", "2.2.0")]
     [Description("Modify loot on your server.")]
     public class LootPlus : RustPlugin
     {
@@ -37,6 +38,12 @@ namespace Oxide.Plugins
         {
             [JsonProperty(PropertyName = "Refill Loot On Plugin Load")]
             public bool RefillOnLoad = true;
+            
+            [JsonProperty(PropertyName = "Process Corpses")]
+            public bool ProcessCorpses = true;
+            
+            [JsonProperty(PropertyName = "Process Loot Containers")]
+            public bool ProcessLootContainers = true;
             
             [JsonProperty(PropertyName = "Container Loot Save Command")]
             public string LootSaveCommand = "lootsave";
@@ -65,17 +72,27 @@ namespace Oxide.Plugins
 
         private class ContainerData
         {
-            [JsonProperty(PropertyName = "Entity Shortname")]
-            public string Shortname = "entity.shortname";
+            [JsonProperty(PropertyName = "Entity Shortname", NullValueHandling = NullValueHandling.Ignore)]
+            public string Shortname = null;
 
-            [JsonProperty(PropertyName = "Exclude Entities Shortnames", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public List<string> Exclude = new List<string> {"stocking_large_deployed", "stocking_small_deployed"};
+            [JsonProperty(PropertyName = "Entity Shortnames")]
+            public List<ShortnameData> Shortnames = new List<ShortnameData>
+            {
+                new ShortnameData()
+            };
+
+            [JsonProperty(PropertyName = "Exclude Entities Shortnames",
+                ObjectCreationHandling = ObjectCreationHandling.Replace, NullValueHandling = NullValueHandling.Ignore)]
+            public List<string> Exclude = null;
             
-            [JsonProperty(PropertyName = "API Shortname")]
-            public string APIShortname = "";
+            [JsonProperty(PropertyName = "API Shortname", NullValueHandling = NullValueHandling.Ignore)]
+            public string APIShortname = null;
             
-            [JsonProperty(PropertyName = "Monument Prefab (Empty To Ignore)")]
-            public string Monument = "";
+            [JsonProperty(PropertyName = "Monument Prefab (Empty To Ignore)", NullValueHandling = NullValueHandling.Ignore)]
+            public string Monument = null;
+
+            [JsonProperty(PropertyName = "Monument Prefabs", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public List<string> Monuments = new List<string> {""};
 
             [JsonProperty(PropertyName = "Shuffle Items")]
             public bool ShuffleItems = true;
@@ -112,12 +129,69 @@ namespace Oxide.Plugins
             
             [JsonProperty(PropertyName = "Items", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<ItemData> Items = new List<ItemData> {new ItemData()};
+
+            public bool ShortnameFits(string shortname, bool api)
+            {
+                var fits = false;
+
+                for (var i = 0; i < Shortnames.Count; i++)
+                {
+                    var shortnameData = Shortnames[i];
+                    if (shortnameData.API != api)
+                        continue;
+
+                    var fitsExpression = shortnameData.FitsExpression(shortname);
+                    if (!fitsExpression)
+                        continue;
+
+                    if (shortnameData.Exclude)
+                        return false;
+
+                    fits = true;
+                }
+
+                return fits;
+            }
+
+            public class ShortnameData
+            {
+                [JsonProperty(PropertyName = "Shortname")]
+                public string Shortname = "entity.shortname";
+            
+                [JsonProperty(PropertyName = "Enable Regex")]
+                public bool Regex = false;
+            
+                [JsonProperty(PropertyName = "Exclude")]
+                public bool Exclude = false;
+            
+                [JsonProperty(PropertyName = "API Shortname")]
+                public bool API = false;
+
+                [JsonIgnore]
+                public Regex ParsedRegex;
+
+                public bool FitsExpression(string shortname)
+                {
+                    if (Regex)
+                    {
+                        return ParsedRegex.IsMatch(shortname);
+                    }
+
+                    return Shortname == "global" || Shortname == shortname;
+                }
+            }
         }
 
         private class ItemData : ChanceData
         {
             [JsonProperty(PropertyName = "Item Shortname")]
             public string Shortname = "item.shortname";
+
+            [JsonProperty(PropertyName = "Item Shortnames")]
+            public List<ShortnameData> Shortnames = new List<ShortnameData>
+            {
+                new ShortnameData()
+            };
 
             [JsonProperty(PropertyName = "Item Name (Empty To Ignore)")]
             public string Name = "";
@@ -139,6 +213,51 @@ namespace Oxide.Plugins
             
             [JsonProperty(PropertyName = "Amount", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<AmountData> Amount = new List<AmountData> {new AmountData()};
+
+            public bool ShortnameFits(string shortname)
+            {
+                var fits = false;
+
+                for (var i = 0; i < Shortnames.Count; i++)
+                {
+                    var shortnameData = Shortnames[i];
+                    var fitsExpression = shortnameData.FitsExpression(shortname);
+                    if (!fitsExpression)
+                        continue;
+
+                    if (shortnameData.Exclude)
+                        return false;
+
+                    fits = true;
+                }
+
+                return fits;
+            }
+
+            public class ShortnameData
+            {
+                [JsonProperty(PropertyName = "Shortname")]
+                public string Shortname = "entity.shortname";
+            
+                [JsonProperty(PropertyName = "Enable Regex")]
+                public bool Regex = false;
+            
+                [JsonProperty(PropertyName = "Exclude")]
+                public bool Exclude = false;
+
+                [JsonIgnore]
+                public Regex ParsedRegex;
+
+                public bool FitsExpression(string shortname)
+                {
+                    if (Regex)
+                    {
+                        return ParsedRegex.IsMatch(shortname);
+                    }
+
+                    return Shortname == "global" || Shortname == shortname;
+                }
+            }
         }
         
         #region Additional
@@ -243,7 +362,6 @@ namespace Oxide.Plugins
                 {
                     var entry = data[i];
                     sum2 += entry?.Chance ?? 0;
-                    PrintDebug($"Current sum: {sum2}, random: {random}");
                     if (random <= sum2)
                         return entry;
                 }
@@ -315,7 +433,13 @@ namespace Oxide.Plugins
                 ModifyItems = false,
                 AddItems = false,
                 ReplaceItems = true,
-                Shortname = container.ShortPrefabName,
+                Shortnames = new List<ContainerData.ShortnameData> {new ContainerData.ShortnameData
+                {
+                    Shortname = container.ShortPrefabName,
+                    Exclude = false,
+                    Regex = false,
+                    API = false
+                }},
                 Capacity = new List<CapacityData>
                 {
                     new CapacityData
@@ -429,9 +553,68 @@ namespace Oxide.Plugins
                 if (_config.DuplicateItemsDifferentSkins.HasValue)
                     container.DuplicateItemsDifferentSkins = _config.DuplicateItemsDifferentSkins.Value;
 
+                if (!string.IsNullOrEmpty(container.Shortname))
+                {
+                    container.Shortnames.Add(new ContainerData.ShortnameData
+                    {
+                        Shortname = container.Shortname,
+                        Exclude = false,
+                        Regex = false
+                    });
+
+                    container.Shortname = null;
+                }
+
+                if (container.Exclude.Count > 0)
+                {
+                    for (var j = 0; j < container.Exclude.Count; j++)
+                    {
+                        var shortname = container.Exclude[j];
+                        container.Shortnames.Add(new ContainerData.ShortnameData
+                        {
+                            Shortname = shortname,
+                            Exclude = true,
+                            Regex = false
+                        });
+                    }
+
+                    container.Exclude = null;
+                }
+
+                if (!string.IsNullOrEmpty(container.APIShortname))
+                {
+                    container.Shortnames.Add(new ContainerData.ShortnameData
+                    {
+                        Shortname = container.APIShortname,
+                        Exclude = false,
+                        Regex = false,
+                        API = true
+                    });
+
+                    container.APIShortname = null;
+                }
+
+                if (!string.IsNullOrEmpty(container.Monument))
+                {
+                    container.Monuments.Add(container.Monument);
+                    container.Monument = null;
+                }
+
                 for (var j = 0; j < container.Items.Count; j++)
                 {
                     var item = container.Items[j];
+                    if (container.ModifyItems && !string.IsNullOrEmpty(item.Shortname))
+                    {
+                        item.Shortnames.Add(new ItemData.ShortnameData
+                        {
+                            Shortname = item.Shortname,
+                            Exclude = false,
+                            Regex = false
+                        });
+
+                        item.Shortname = null;
+                    }
+                    
                     for (var k = 0; k < item.Amount.Count; k++)
                     {
                         var amount = item.Amount[k];
@@ -442,13 +625,33 @@ namespace Oxide.Plugins
                         amount.MaxAmount = amount.Amount.Value;
                         amount.Amount = null;
                     }
+
+                    for (var k = 0; k < item.Shortnames.Count; k++)
+                    {
+                        var shortname = item.Shortnames[k];
+                        if (!shortname.Regex)
+                            continue;
+
+                        shortname.ParsedRegex = new Regex(shortname.Shortname);
+                    }
+                }
+
+                for (var j = 0; j < container.Shortnames.Count; j++)
+                {
+                    var shortname = container.Shortnames[j];
+                    if (!shortname.Regex)
+                        continue;
+                    
+                    shortname.ParsedRegex = new Regex(shortname.Shortname);
                 }
             }
 
             if (_config.ShuffleItems.HasValue)
                 _config.ShuffleItems = null;
+            
             if (_config.DuplicateItems.HasValue)
                 _config.DuplicateItems = null;
+            
             if (_config.DuplicateItemsDifferentSkins.HasValue)
                 _config.DuplicateItemsDifferentSkins = null;
             
@@ -524,7 +727,7 @@ namespace Oxide.Plugins
         private void OnEntitySpawned(BaseNetworkable entity)
         {
             var container = entity as LootContainer;
-            if (container != null)
+            if (container != null && _config.ProcessLootContainers)
             {
                 PrintDebug("Entity is a LootContainer. Waiting for OnLootSpawn");
                 return; // So this entity's content is modified in OnLootSpawn
@@ -539,9 +742,8 @@ namespace Oxide.Plugins
                 return;
             
             var corpse = entity as LootableCorpse;
-            if (corpse != null)
+            if (corpse != null && _config.ProcessCorpses)
             {
-                PrintDebug($"{entity.ShortPrefabName} is a corpse");
                 if (corpse.containers == null || corpse.containers.Length == 0)
                 {
                     PrintDebug("Entity has no containers");
@@ -557,9 +759,8 @@ namespace Oxide.Plugins
 
             var lootContainer = entity as LootContainer;
             // ReSharper disable once InvertIf
-            if (lootContainer != null)
+            if (lootContainer != null && _config.ProcessLootContainers)
             {
-                PrintDebug($"{entity.ShortPrefabName} is a loot container");
                 RunLootHandler(entity, lootContainer.inventory, -1);
             }
         }
@@ -613,32 +814,23 @@ namespace Oxide.Plugins
             for (var i = 0; i < _config.Containers.Count; i++)
             {
                 var container = _config.Containers[i];
-                if (networkable != null && apiShortname == null)
-                {
-                    if (container.Shortname != "global" && container.Shortname != networkable.ShortPrefabName ||
-                        container.Exclude.Contains(networkable.ShortPrefabName))
-                        continue;
-                }
-                else
-                {
-                    if (apiShortname != container.APIShortname)
-                        continue;
-                }
+
+                var isApi = networkable == null && apiShortname != null;
+                if (!container.ShortnameFits(isApi ? apiShortname : networkable.ShortPrefabName, isApi))
+                    continue;
 
                 if (containerIndex != -1 && !container.ContainerIndexes.Contains(containerIndex))
                 {
                     continue;
                 }
 
-                if (networkable != null && apiShortname == null && !string.IsNullOrEmpty(container.Monument))
+                if (networkable != null && container.Monuments.Count > 0)
                 {
                     var monument = GetMonumentName(networkable.transform.position);
                     PrintDebug($"Found monument: {monument}");
                     
-                    if (monument != container.Monument)
-                    {
+                    if (!container.Monuments.Contains(monument))
                         continue;
-                    }
                 }
 
                 yield return HandleInventory(networkable, inventory, container);
@@ -647,9 +839,6 @@ namespace Oxide.Plugins
 
         private IEnumerator HandleInventory(BaseNetworkable networkable, ItemContainer inventory, ContainerData container)
         {
-            PrintDebug(
-                $"Handling container. S:{container.Shortname} / API:{container.APIShortname}");
-
             // TODO: Handle on spawn if configured, so not on Loot Spawn if possible.
             if (container.RemoveContainer)
             {
@@ -836,12 +1025,11 @@ namespace Oxide.Plugins
                     yield return null;
 
                     var dataItem = container.Items[j];
-                    if (dataItem.Shortname != "global" && dataItem.Shortname != item.info.shortname ||
-                        dataItem.IsBlueprint != item.IsBlueprint())
+                    if (!dataItem.ShortnameFits(item.info.shortname) || dataItem.IsBlueprint != item.IsBlueprint())
                         continue;
 
                     PrintDebug(
-                        $"Handling item {dataItem.Shortname} (Blueprint: {dataItem.IsBlueprint} / Stacking: {dataItem.AllowStacking})");
+                        $"Handling item {item.info.shortname} (Blueprint: {dataItem.IsBlueprint} / Stacking: {dataItem.AllowStacking})");
 
                     if (dataItem.RemoveItem)
                     {
@@ -896,6 +1084,7 @@ namespace Oxide.Plugins
             }
         }
 
+        // Not used in modify
         private static bool IsDuplicate(IReadOnlyList<Item> list, ContainerData container, ItemData dataItem, ulong skin)
         {
             for (var j = 0; j < list.Count; j++)
@@ -913,7 +1102,7 @@ namespace Oxide.Plugins
                 if (container.DuplicateItemsDifferentSkins && item.skin != skin)
                     continue;
 
-                PrintDebug("Found a duplicate");
+                PrintDebug("Found a duplicate item");
                 return true;
             }
 
