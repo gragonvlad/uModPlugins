@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Balloon Plus", "Iv Misticos", "1.0.5")]
+    [Info("Balloon Plus", "Iv Misticos", "1.0.6")]
     [Description("Control your balloon's flight")]
     class BalloonPlus : RustPlugin
     {
@@ -143,6 +143,7 @@ namespace Oxide.Plugins
             timer.Every(_config.Frequency, HandleUpdate);
         }
 
+        private void OnPlayerInit(BasePlayer player) => UpdateCacheSpeedData(player.UserIDString);
         private void OnUserGroupAdded(string id, string groupName) => UpdateCacheSpeedData(id);
         private void OnUserGroupRemoved(string id, string groupName) => UpdateCacheSpeedData(id);        
         private void OnUserPermissionGranted(string id, string permName) => UpdateCacheSpeedData(id);        
