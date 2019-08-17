@@ -12,7 +12,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Loot Plus", "Iv Misticos", "2.2.1")]
+    [Info("Loot Plus", "Iv Misticos", "2.2.2")]
     [Description("Modify loot on your server.")]
     public class LootPlus : RustPlugin
     {
@@ -117,6 +117,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Modify Items")]
             public bool ModifyItems = false;
+
+            [JsonProperty(PropertyName = "Fill With Default Items")]
+            public bool DefaultLoot = false;
 
             [JsonProperty(PropertyName = "Online Condition")]
             public OnlineData Online = new OnlineData();
@@ -732,7 +735,6 @@ namespace Oxide.Plugins
 
         private void Unload()
         {
-            LootPlusController.TryDestroy();
             _initialized = false;
             
             // LOOT IS BACK
@@ -825,29 +827,6 @@ namespace Oxide.Plugins
 
         #endregion
         
-        #region Controller
-        
-        private class LootPlusController : FacepunchBehaviour
-        {
-            private static LootPlusController _instance;
-
-            public static LootPlusController Instance => _instance ? _instance : new GameObject().AddComponent<LootPlusController>();
-
-            private void Awake()
-            {
-                TryDestroy();
-                _instance = this;
-            }
-
-            public static void TryDestroy()
-            {
-                if (_instance)
-                    Destroy(_instance.gameObject);
-            }
-        }
-        
-        #endregion
-        
         #region API
 
         private void FillContainer(ItemContainer container, string apiShortname, int containerIndex = -1)
@@ -861,7 +840,7 @@ namespace Oxide.Plugins
 
         private void RunLootHandler(BaseNetworkable networkable, ItemContainer inventory, int containerIndex)
         {
-            NextFrame(() => LootPlusController.Instance.StartCoroutine(LootHandler(networkable, inventory, containerIndex)));
+            NextFrame(() => ServerMgr.Instance.StartCoroutine(LootHandler(networkable, inventory, containerIndex)));
         }
 
         private IEnumerator LootHandler(BaseNetworkable networkable, ItemContainer inventory, int containerIndex, string apiShortname = null)
@@ -942,14 +921,12 @@ namespace Oxide.Plugins
                     ItemManager.DoRemoves();
                     inventory.capacity = dataCapacity.Capacity;
                     yield return HandleInventoryAddReplace(inventory, container);
-                    yield break;
                 }
 
                 if (container.AddItems)
                 {
                     inventory.capacity += dataCapacity.Capacity;
                     yield return HandleInventoryAddReplace(inventory, container);
-                    yield break;
                 }
             }
 
@@ -957,6 +934,25 @@ namespace Oxide.Plugins
             {
                 yield return HandleInventoryModify(inventory, container);
             }
+
+            if (!container.DefaultLoot)
+                yield break;
+            
+            PrintDebug("Filling with default loot..");
+            
+            if (networkable == null || !(networkable is LootContainer))
+            {
+                PrintWarning("Tried to set vanilla loot, but it's not a loot container");
+                yield break;
+            }
+
+            var lootContainer = (LootContainer) networkable;
+            for (var i = 0; i < lootContainer.LootSpawnSlots.Length; i++)
+            {
+                lootContainer.LootSpawnSlots[i].numberToSpawn = inventory.capacity;
+            }
+
+            lootContainer.PopulateLoot();
         }
 
         private void HandleAPIFill(ItemContainer container, string apiShortname, int containerIndex)
@@ -981,6 +977,13 @@ namespace Oxide.Plugins
                 if (dataItem == null)
                 {
                     PrintDebug("Could not select a correct item");
+                
+                    if (++failures > container.MaxRetries)
+                    {
+                        PrintDebug("Stopping because of failures");
+                        break;
+                    }
+                    
                     continue;
                 }
 
@@ -1178,7 +1181,7 @@ namespace Oxide.Plugins
             {
                 while (enumerator.MoveNext())
                 {
-                    OnEntitySpawned(enumerator.Current);
+                    OnLootSpawn(enumerator.Current);
                 }
             }
         }
