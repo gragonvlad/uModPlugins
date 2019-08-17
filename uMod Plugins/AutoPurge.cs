@@ -1,19 +1,25 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
+using Oxide.Core.Plugins;
 using Time = Oxide.Core.Libraries.Time;
 
 namespace Oxide.Plugins
 {
-    [Info("Auto Purge", "misticos", "2.0.3")]
+    [Info("Auto Purge", "misticos", "2.0.4")]
     [Description("Remove entities if the owner becomes inactive")]
     public class AutoPurge : RustPlugin
     {
         #region Variables
+
+        [PluginReference]
+        // ReSharper disable once InconsistentNaming
+        private Plugin PlaceholderAPI;
 
         private Time _time = GetLibrary<Time>();
 
@@ -38,6 +44,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Last Seen Timer Frequency")]
             public float LastSeenFrequency = 300f;
+
+            [JsonProperty(PropertyName = "Debug")]
+            public bool Debug = false;
 
             public class PurgeSettings
             {
@@ -192,6 +201,9 @@ namespace Oxide.Plugins
         {
             _timerLastSeen = timer.Every(_config.LastSeenFrequency, UpdateLastSeen);
             _timerPurge = timer.Every(_config.PurgeFrequency, RunPurge);
+
+            PlaceholderAPI?.Call("AddPlaceholder", this, "AutoPurge",
+                new Action<IPlayer, StringBuilder>(OnPlaceholderAPI));
         }
 
         private void Unload()
@@ -238,6 +250,7 @@ namespace Oxide.Plugins
             
             foreach (var player in covalence.Players.Connected)
             {
+                PrintDebug($"UpdateLastSeen {player.Id}");
                 PluginData.UserData.Find(player.Id).LastSeen = now;
             }
 
@@ -259,6 +272,9 @@ namespace Oxide.Plugins
             {
                 while (enumerator.MoveNext())
                 {
+                    if (!IsLoaded)
+                        yield break;
+                    
                     var entity = enumerator.Current;
                     var isDecay = entity is DecayEntity;
                     if (!isDecay)
@@ -297,10 +313,14 @@ namespace Oxide.Plugins
 
         private bool CanPurgeUser(string playerId)
         {
+            if (string.IsNullOrEmpty(playerId) || playerId == "0")
+                return false;
+            
             var purge = Configuration.PurgeSettings.Find(playerId);
             if (purge == null || purge.NoPurge)
                 return false;
 
+            PrintDebug($"CanPurgeUser {playerId}");
             var user = PluginData.UserData.Find(playerId);
             if (user.LastSeen == 0)
                 return false;
@@ -354,7 +374,32 @@ namespace Oxide.Plugins
         
         #region Helpers
 
+        private void OnPlaceholderAPI(IPlayer player, StringBuilder builder)
+        {
+            if (string.IsNullOrEmpty(player.Id) || player.Id == "0")
+                return;
+            
+            PrintDebug($"OnPlaceholderAPI {player.Id}");
+            var data = PluginData.UserData.Find(player.Id);
+            if (data == null)
+                return;
+
+            var lastSeen = data.LastSeen;
+            var inactiveTime = _time.GetUnixTimestamp() - data.LastSeen;
+            var dateTimeLastSeen = _time.GetDateTimeFromUnix(lastSeen);
+            builder.Replace("{autopurge.lastSeen}", $"{lastSeen}");
+            builder.Replace("{autopurge.inactiveTime}", $"{inactiveTime}");
+            builder.Replace("{autopurge.lastSeenDate}", $"{dateTimeLastSeen.ToLongDateString()}");
+            builder.Replace("{autopurge.lastSeenTime}", $"{dateTimeLastSeen.ToLongTimeString()}");
+        }
+
         private string GetMsg(string key, string userId) => lang.GetMessage(key, this, userId);
+
+        private void PrintDebug(string message)
+        {
+            if (_config.Debug)
+                Interface.Oxide.LogDebug(message);
+        }
 
         #endregion
     }
