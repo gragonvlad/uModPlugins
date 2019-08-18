@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using Newtonsoft.Json;
 using Oxide.Core.Libraries.Covalence;
 using UnityEngine;
-using Time = UnityEngine.Time;
 
 namespace Oxide.Plugins
 {
-    [Info("Object Remover", "Iv Misticos", "3.0.4")]
+    [Info("Object Remover", "Iv Misticos", "3.0.5")]
     [Description("Removes furnaces, lanterns, campfires, buildings etc. on command")]
     class ObjectRemover : RustPlugin
     {
@@ -24,10 +25,16 @@ namespace Oxide.Plugins
         private class Configuration
         {
             [JsonProperty(PropertyName = "Object Command Permission")]
-            public string PermissionUse = "objectremover.use";
+            public string PermissionObject = "objectremover.use";
+            
+            [JsonProperty(PropertyName = "Statistics Command Permission")]
+            public string PermissionStatistics = "objectremover.statistics";
             
             [JsonProperty(PropertyName = "Object Command")]
-            public string Command = "object";
+            public string CommandObject = "object";
+            
+            [JsonProperty(PropertyName = "Statistics Command")]
+            public string CommandStatistics = "objtop";
             
             public string Prefix = "[<color=#ffbf00> Object Remover </color>] ";
         }
@@ -69,7 +76,10 @@ namespace Oxide.Plugins
                           "radius NUM - Radius\n" +
                           "inside true/false - Entities inside the cupboard\n" +
                           "outside true/false - Entities outside the cupboard" },
-                { "No Console", "Please log in as a player to use that command" }
+                { "No Console", "Please log in as a player to use that command" },
+                { "Statistics Header", "Objects Statistics:" },
+                { "Statistics Entry", "\n#{position} - {shortname} x {count}" },
+                { "Statistics Footer", "\nDone." }
             }, this);
         }
 
@@ -78,10 +88,11 @@ namespace Oxide.Plugins
             LoadDefaultMessages();
             LoadConfig();
             
-            if (!permission.PermissionExists(_config.PermissionUse))
-                permission.RegisterPermission(_config.PermissionUse, this);
+            permission.RegisterPermission(_config.PermissionObject, this);
+            permission.RegisterPermission(_config.PermissionStatistics, this);
 
-            AddCovalenceCommand(_config.Command, "CommandObject");
+            AddCovalenceCommand(_config.CommandObject, nameof(CommandObject));
+            AddCovalenceCommand(_config.CommandStatistics, nameof(CommandStatistics));
         }
         
         #endregion
@@ -90,17 +101,16 @@ namespace Oxide.Plugins
 
         private void CommandObject(IPlayer player, string command, string[] args)
         {
-            var id = player.Id;
             var prefix = player.IsServer ? string.Empty : _config.Prefix;
-            if (!player.IsServer && !permission.UserHasPermission(id, _config.PermissionUse))
+            if (!player.HasPermission(_config.PermissionObject))
             {
-                player.Reply(prefix + GetMsg("No Rights", id));
+                player.Reply(prefix + GetMsg("No Rights", player.Id));
                 return;
             }
 
             if (args.Length < 1)
             {
-                player.Reply(prefix + GetMsg("Help", id));
+                player.Reply(prefix + GetMsg("Help", player.Id));
                 return;
             }
 
@@ -126,62 +136,61 @@ namespace Oxide.Plugins
                 }
             }
 
-            player.Reply(prefix + GetMsg(options.Count ? "Count" : "Removed", id)
-                                   .Replace("{count}", count.ToString()).Replace("{time}",
-                                       (Time.realtimeSinceStartup - before).ToString("0.###")));
+            player.Reply(prefix + GetMsg(options.Count ? "Count" : "Removed", player.Id)
+                             .Replace("{count}", count.ToString()).Replace("{time}",
+                                 (Time.realtimeSinceStartup - before).ToString("0.###")));
         }
 
-//        private void CommandChatObject(BasePlayer player, string command, string[] args)
-//        {
-//            var id = player.UserIDString;
-//            if (!permission.UserHasPermission(id, _config.PermissionUse))
-//            {
-//                player.ChatMessage(_config.Prefix + GetMsg("No Rights", id));
-//                return;
-//            }
-//
-//            if (args.Length < 1)
-//            {
-//                player.ChatMessage(_config.Prefix + GetMsg("Help", id));
-//                return;
-//            }
-//
-//            var options = new RemoveOptions();
-//            options.Parse(args);
-//            
-//            var entity = args[0];
-//            var before = Time.realtimeSinceStartup;
-//            var objects = FindObjects(player.transform.position, entity, options);
-//            var count = objects.Count;
-//
-//            if (!options.Count)
-//            {
-//                for (var i = 0; i < count; i++)
-//                {
-//                    var ent = objects[i];
-//                    if (ent == null || ent.IsDestroyed)
-//                        continue;
-//                    ent.Kill();
-//                }
-//            }
-//
-//            player.ChatMessage(_config.Prefix + GetMsg(options.Count ? "Count" : "Removed", id)
-//                                   .Replace("{count}", count.ToString()).Replace("{time}",
-//                                       (Time.realtimeSinceStartup - before).ToString("0.###")));
-//        }
-//        
-//        private bool CommandConsoleObject(ConsoleSystem.Arg arg)
-//        {
-//            var player = arg.Player();
-//            if (player == null)
-//            {
-//                arg.ReplyWith(GetMsg("No Console"));
-//                return true;
-//            }
-//            
-//            CommandChatObject(player, string.Empty, arg.Args ?? new string[0]);
-//            return false;
-//        }
+        private void CommandStatistics(IPlayer player, string command, string[] args)
+        {
+            var prefix = player.IsServer ? string.Empty : _config.Prefix;
+            if (!player.HasPermission(_config.PermissionStatistics))
+            {
+                player.Reply(prefix + GetMsg("No Rights", player.Id));
+                return;
+            }
+
+            int amount;
+            if (args == null || args.Length == 0 || !int.TryParse(args[0], out amount))
+                amount = 10;
+
+            var entities = new Dictionary<string, int>();
+
+            using (var enumerator = BaseNetworkable.serverEntities.GetEnumerator())
+            {
+                while (enumerator.MoveNext())
+                {
+                    var entity = enumerator.Current;
+                    if (entity == null)
+                        continue;
+
+                    var shortname = entity.ShortPrefabName;
+                    if (entities.ContainsKey(shortname))
+                        entities[shortname]++;
+                    else
+                        entities[shortname] = 1;
+                }
+            }
+
+            player.Reply(prefix + GetMsg("Statistics Header", player.Id));
+            
+            var builder = new StringBuilder();
+            using (var enumerator = entities.OrderByDescending(x => x.Value).Take(amount).GetEnumerator())
+            {
+                var currentPosition = 1;
+                while (enumerator.MoveNext())
+                {
+                    builder.Length = 0;
+                    builder.Append(GetMsg("Statistics Entry", player.Id));
+                    builder.Replace("{position}", $"{currentPosition++}");
+                    builder.Replace("{shortname}", $"{enumerator.Current.Key}");
+                    builder.Replace("{count}", $"{enumerator.Current.Value}");
+                    player.Reply(prefix + builder);
+                }
+            }
+            
+            player.Reply(prefix + GetMsg("Statistics Footer", player.Id));
+        }
 
         #endregion
         
