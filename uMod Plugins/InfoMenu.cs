@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Oxide.Core;
@@ -20,19 +21,19 @@ namespace Oxide.Plugins
         private static InfoMenu _ins;
 
         #pragma warning disable 649
-        
+
         [PluginReference]
         // ReSharper disable once InconsistentNaming
         private Plugin ImageLibrary;
-        
+
         [PluginReference]
         // ReSharper disable once InconsistentNaming
         private Plugin PlaceholderAPI;
-        
+
         #pragma warning restore 649
-        
+
         #endregion
-        
+
         #region Configuration
 
         private static Configuration _config;
@@ -41,7 +42,7 @@ namespace Oxide.Plugins
         {
             [JsonProperty(PropertyName = "Tabs", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<Tab> Tabs = new List<Tab> {new Tab()};
-            
+
             [JsonProperty(PropertyName = "Button", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<Button> Buttons = new List<Button> {new Button()};
 
@@ -50,7 +51,7 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Commands", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<string> Commands = new List<string> {"menu", "info", "help"};
-            
+
             [JsonProperty(PropertyName = "Menu UI")]
             public UISettings UI = new UISettings();
 
@@ -75,26 +76,26 @@ namespace Oxide.Plugins
                         OffsetMaxY = 300
                     }
                 };
-                
+
                 [JsonProperty(PropertyName = "Menu Background Color")]
                 public UIData.Colors MenuBackgroundColor = new UIData.Colors();
-                
+
                 [JsonProperty(PropertyName = "Menu Color")]
                 public UIData.Colors MenuColor = new UIData.Colors();
-                
+
                 [JsonProperty(PropertyName = "Menu Title Background Position")]
                 public UIData.Position MenuTitleBackgroundPosition = new UIData.Position();
-                
+
                 [JsonProperty(PropertyName = "Menu Title Background Color")]
                 public UIData.Colors MenuTitleBackgroundColor = new UIData.Colors();
-                
+
                 [JsonProperty(PropertyName = "Menu Title Text")]
                 public string MenuTitleText = "<size=3em>Info Menu</size>";
-                
+
                 [JsonProperty(PropertyName = "Menu Title Text Anchor")]
                 [JsonConverter(typeof(StringEnumConverter))]
                 public TextAnchor MenuTitleTextAnchor = TextAnchor.MiddleCenter;
-                
+
                 [JsonProperty(PropertyName = "Menu Title Placeholder API")]
                 public bool MenuTitlePlaceholder = false;
 
@@ -106,7 +107,7 @@ namespace Oxide.Plugins
 
                 [JsonIgnore]
                 public CuiElement ParsedMenu;
-                
+
                 [JsonIgnore]
                 public CuiElement ParsedMenuTitleBackground;
 
@@ -127,7 +128,7 @@ namespace Oxide.Plugins
 
                 [JsonIgnore]
                 public readonly string MenuTitleName = "InfoMenu.Title";
-                
+
                 #region Generation
 
                 public CuiElement GetMenuBackground()
@@ -252,29 +253,17 @@ namespace Oxide.Plugins
 
                 public CuiElement GetMenuTitle(IPlayer player = null)
                 {
-                    var textComponent = new CuiTextComponent
-                    {
-                        Align = MenuTitleTextAnchor
-                    };
-                    
-                    if (MenuTitlePlaceholder)
-                    {
-                        var text = string.Copy(MenuTitleText);
-                        ProcessPlaceholders(player, text);
-                        textComponent.Text = text;
-                    }
-                    else
-                    {
-                        textComponent.Text = MenuTitleText;
-                    }
-
                     return new CuiElement
                     {
                         Name = MenuTitleName,
                         Parent = MenuTitleBackgroundName,
                         Components =
                         {
-                            textComponent,
+                            new CuiTextComponent
+                            {
+                                Align = MenuTitleTextAnchor,
+                                Text = MenuTitlePlaceholder ? ProcessPlaceholders(player, MenuTitleText) : MenuTitleText
+                            },
                             new CuiRectTransformComponent
                             {
                                 AnchorMin = "0.0 0.0",
@@ -283,7 +272,7 @@ namespace Oxide.Plugins
                         }
                     };
                 }
-                
+
                 #endregion
             }
             // ReSharper restore MemberCanBePrivate.Global
@@ -292,14 +281,17 @@ namespace Oxide.Plugins
             {
                 [JsonProperty(PropertyName = "Permission")]
                 public string Permission = "infomenu.view";
-                    
+
                 [JsonProperty(PropertyName = "Commands", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-                public List<CommandData> Commands = new List<CommandData> {new CommandData
+                public List<CommandData> Commands = new List<CommandData>
                 {
-                    Command = "menu",
-                    Arguments = new object[] {"tab1"}
-                }};
-                
+                    new CommandData
+                    {
+                        Command = "menu",
+                        Arguments = new object[] {"open", "tab1"}
+                    }
+                };
+
                 [JsonProperty(PropertyName = "UI")]
                 public ButtonUI UI = new ButtonUI();
 
@@ -308,17 +300,17 @@ namespace Oxide.Plugins
                 {
                     [JsonProperty(PropertyName = "Background Color")]
                     public UIData.Colors Color = new UIData.Colors();
-                    
+
                     [JsonProperty(PropertyName = "Background Position")]
                     public UIData.Position Position = new UIData.Position();
-                    
+
                     [JsonProperty(PropertyName = "Text")]
                     public string Text = "Text";
-                
+
                     [JsonProperty(PropertyName = "Text Anchor")]
                     [JsonConverter(typeof(StringEnumConverter))]
                     public TextAnchor TextAnchor = TextAnchor.MiddleCenter;
-                    
+
                     [JsonProperty(PropertyName = "Text Placeholder API")]
                     public bool TextPlaceholder = false;
 
@@ -342,7 +334,7 @@ namespace Oxide.Plugins
 
                     [JsonIgnore]
                     public string ButtonTextName = "InfoMenu.Button.Text." + Guid.NewGuid();
-                    
+
                     #region Generation
 
                     public CuiElement GetButtonBackground()
@@ -402,29 +394,17 @@ namespace Oxide.Plugins
 
                     public CuiElement GetButtonText(IPlayer player = null)
                     {
-                        var textComponent = new CuiTextComponent
-                        {
-                            Align = TextAnchor
-                        };
-                        
-                        if (TextPlaceholder)
-                        {
-                            var text = string.Copy(Text);
-                            ProcessPlaceholders(player, text);
-                            textComponent.Text = text;
-                        }
-                        else
-                        {
-                            textComponent.Text = Text;
-                        }
-
                         return new CuiElement
                         {
                             Name = ButtonTextName,
                             Parent = ButtonName,
                             Components =
                             {
-                                textComponent,
+                                new CuiTextComponent
+                                {
+                                    Align = TextAnchor,
+                                    Text = TextPlaceholder ? ProcessPlaceholders(player, Text) : Text
+                                },
                                 new CuiRectTransformComponent
                                 {
                                     AnchorMin = "0.0 0.0",
@@ -433,23 +413,23 @@ namespace Oxide.Plugins
                             }
                         };
                     }
-                    
+
                     #endregion
                 }
                 // ReSharper restore MemberCanBePrivate.Global
             }
-            
+
             public class Tab
             {
                 [JsonProperty(PropertyName = "Technical Name")]
                 public string Name = "tab1";
-                
+
                 [JsonProperty(PropertyName = "Permission")]
                 public string Permission = "infomenu.view";
-                
+
                 [JsonProperty(PropertyName = "Pages", ObjectCreationHandling = ObjectCreationHandling.Replace)]
                 public List<Page> Pages = new List<Page> {new Page()};
-                
+
                 public class Page
                 {
                     [JsonProperty(PropertyName = "Elements", ObjectCreationHandling = ObjectCreationHandling.Replace)]
@@ -493,16 +473,16 @@ namespace Oxide.Plugins
                 [JsonIgnore]
                 public bool IsLink => !string.IsNullOrEmpty(Link);
             }
-            
+
             public class Position
             {
                 [JsonProperty(PropertyName = "Anchors")]
                 public Anchors Anchors = new Anchors();
-                
+
                 [JsonProperty(PropertyName = "Offsets")]
                 public Offsets Offsets = new Offsets();
             }
-            
+
             public class Anchors
             {
                 [JsonProperty(PropertyName = "Anchor Min X")]
@@ -510,10 +490,10 @@ namespace Oxide.Plugins
 
                 [JsonProperty(PropertyName = "Anchor Min Y")]
                 public float AnchorMinY = 0.0f;
-                
+
                 [JsonProperty(PropertyName = "Anchor Max X")]
                 public float AnchorMaxX = 1.0f;
-                
+
                 [JsonProperty(PropertyName = "Anchor Max Y")]
                 public float AnchorMaxY = 1.0f;
 
@@ -523,7 +503,7 @@ namespace Oxide.Plugins
                 [JsonIgnore]
                 public string AnchorsMax => $"{AnchorMaxX} {AnchorMaxY}";
             }
-            
+
             public class Offsets
             {
                 [JsonProperty(PropertyName = "Offset Min X")]
@@ -531,10 +511,10 @@ namespace Oxide.Plugins
 
                 [JsonProperty(PropertyName = "Offset Min Y")]
                 public int OffsetMinY = -50;
-                
+
                 [JsonProperty(PropertyName = "Offset Max X")]
                 public int OffsetMaxX = 50;
-                
+
                 [JsonProperty(PropertyName = "Offset Max Y")]
                 public int OffsetMaxY = 50;
 
@@ -568,25 +548,27 @@ namespace Oxide.Plugins
         protected override void LoadDefaultConfig() => _config = new Configuration();
 
         #endregion
-        
+
         #region Hooks
 
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                { "Invalid Syntax", "Invalid command syntax. Usage:\n" +
-                                    "open <Tab> - Open a tab\n" +
-                                    "close - Close UI" },
-                { "Only Players", "This command is available only for players." },
-                { "No Tab", "Sorry, we couldn't find this tab. Report it to admins." }
+                {
+                    "Invalid Syntax", "Invalid command syntax. Usage:\n" +
+                                      "open <Tab> - Open a tab\n" +
+                                      "close - Close UI"
+                },
+                {"Only Players", "This command is available only for players."},
+                {"No Tab", "Sorry, we couldn't find this tab. Report it to admins."}
             }, this);
         }
 
         private void OnServerInitialized()
         {
             _ins = this;
-            
+
             if (_config.UI.MenuBackgroundColor.IsLink)
             {
                 ImageLibraryLoad(_config.UI.MenuBackgroundName, _config.UI.MenuBackgroundColor.Link);
@@ -631,7 +613,7 @@ namespace Oxide.Plugins
                 // Check for existance to prevent load spam if same permissions used
                 if (!string.IsNullOrEmpty(tab.Permission) && !permission.PermissionExists(tab.Permission))
                     permission.RegisterPermission(tab.Permission, this);
-                
+
                 foreach (var page in tab.Pages)
                 {
                     foreach (var button in page.Buttons)
@@ -656,9 +638,9 @@ namespace Oxide.Plugins
 
             _ins = null;
         }
-        
+
         #endregion
-        
+
         #region Commands
 
         private void CommandInfoMenu(IPlayer player, string command, string[] args)
@@ -669,7 +651,7 @@ namespace Oxide.Plugins
                 player.Reply(GetMsg("Only Players", player.Id));
                 return;
             }
-            
+
             if (args == null || args.Length == 0)
                 args = new[] {"open"};
 
@@ -678,7 +660,7 @@ namespace Oxide.Plugins
                 case "open":
                 {
                     var tab = args.Length < 2 ? _config.DefaultTab : args[1];
-                    
+
                     InterfaceClose(basePlayer);
                     InterfaceShow(basePlayer, tab);
                     return;
@@ -695,13 +677,13 @@ namespace Oxide.Plugins
                     goto invalidSyntax;
                 }
             }
-            
+
             invalidSyntax:
             player.Reply(GetMsg("Invalid Syntax", player.Id));
         }
-        
+
         #endregion
-        
+
         #region UI
 
         private void InterfaceShow(BasePlayer player, string tabName)
@@ -709,7 +691,8 @@ namespace Oxide.Plugins
             Configuration.Tab selectedTab = null;
             foreach (var tab in _config.Tabs)
             {
-                if (tab.Name != tabName || !string.IsNullOrEmpty(tab.Permission) && !player.IPlayer.HasPermission(tab.Permission))
+                if (tab.Name != tabName || !string.IsNullOrEmpty(tab.Permission) &&
+                    !player.IPlayer.HasPermission(tab.Permission))
                     continue;
 
                 selectedTab = tab;
@@ -721,25 +704,25 @@ namespace Oxide.Plugins
                 player.ChatMessage(GetMsg("No Tab", player.UserIDString));
                 return;
             }
-            
+
             var container = new CuiElementContainer
             {
                 // Menu background
                 _config.UI.MenuBackgroundColor.IsLink
                     ? _config.UI.GetMenuBackground()
                     : _config.UI.ParsedMenuBackground,
-                
+
                 // Menu background button
                 _config.UI.ParsedMenuBackgroundButton,
-                
+
                 // Menu itself
                 _config.UI.MenuColor.IsLink ? _config.UI.GetMenu() : _config.UI.ParsedMenu,
-                
+
                 // Title background
                 _config.UI.MenuTitleBackgroundColor.IsLink
                     ? _config.UI.GetMenuTitleBackground()
                     : _config.UI.ParsedMenuTitleBackground,
-                
+
                 // Title text
                 _config.UI.MenuTitlePlaceholder
                     ? _config.UI.GetMenuTitle(player.IPlayer)
@@ -782,13 +765,13 @@ namespace Oxide.Plugins
             // Check for existance to prevent load spam if same permissions used
             if (!string.IsNullOrEmpty(button.Permission) && !permission.PermissionExists(button.Permission))
                 permission.RegisterPermission(button.Permission, this);
-            
+
             cmd.AddConsoleCommand(button.UI.CommandName, this, arg =>
             {
                 var basePlayer = arg.Player();
                 if (basePlayer == null)
                     return false;
-                
+
                 foreach (var commandData in button.Commands)
                 {
                     basePlayer.SendConsoleCommand(commandData.Command, commandData.Arguments);
@@ -813,14 +796,23 @@ namespace Oxide.Plugins
                 button.UI.ParsedButtonText = button.UI.GetButtonText();
             }
         }
-        
+
         #endregion
-        
+
         #region Helpers
 
-        private static void ProcessPlaceholders(IPlayer player, string text)
+        private static string ProcessPlaceholders(IPlayer player, string text)
         {
-            _ins.PlaceholderAPI.CallHook("ProcessPlaceholders", player, text);
+            if (!_ins.PlaceholderAPILoaded())
+            {
+                Interface.Oxide.LogWarning("Info Menu requires Image Library for links support.");
+                return text;
+            }
+            
+            var builder = new StringBuilder(text);
+            _ins.PlaceholderAPI?.CallHook("ProcessPlaceholders", player, builder);
+
+            return builder.ToString();
         }
 
         private static string ImageLibraryGet(string name)
@@ -842,11 +834,13 @@ namespace Oxide.Plugins
                 Interface.Oxide.LogWarning("Info Menu requires Image Library for links support.");
                 return;
             }
-            
+
             _ins.ImageLibrary.Call("AddImage", link, name, 0UL);
         }
 
         private bool ImageLibraryLoaded() => _ins.ImageLibrary != null && _ins.ImageLibrary.IsLoaded;
+        
+        private bool PlaceholderAPILoaded() => _ins.PlaceholderAPI != null && _ins.PlaceholderAPI.IsLoaded;
 
         private static string GetColor(string hex, float alpha)
         {
