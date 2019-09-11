@@ -7,7 +7,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Placeholder API", "Iv Misticos", "1.0.1")]
+    [Info("Placeholder API", "Iv Misticos", "1.0.2")]
     [Description("API for placeholders in plugins' messages")]
     class PlaceholderAPI : CovalencePlugin
     {
@@ -58,8 +58,6 @@ namespace Oxide.Plugins
         
         private class PluginData
         {
-            public StringBuilder Builder = new StringBuilder();
-            
             public List<DynamicPlaceholder> Placeholders = new List<DynamicPlaceholder>();
             
             public class DynamicPlaceholder
@@ -98,25 +96,17 @@ namespace Oxide.Plugins
         #region API
 
         [HookMethod(nameof(ProcessPlaceholders))]
-        private void ProcessPlaceholders(IPlayer player, string content)
+        private void ProcessPlaceholders(IPlayer player, StringBuilder builder)
         {
-            // Clearing builder and appending content
-            _data.Builder.Length = 0;
-            _data.Builder.Append(content);
-            
             foreach (var placeholder in _data.Placeholders)
             {
-                placeholder.Action?.Invoke(player, _data.Builder);
+                placeholder.Action?.Invoke(player, builder);
             }
 
             foreach (var placeholder in _config.Placeholders)
             {
-                _data.Builder.Replace(placeholder.Key, placeholder.Value);
+                builder.Replace(placeholder.Key, placeholder.Value);
             }
-
-            // ReSharper disable once RedundantAssignment
-            // String is a reference type, no need to specify ref keyword or something.
-            content = _data.Builder.ToString();
         }
 
         [HookMethod(nameof(ExistsPlaceholder))]
