@@ -5,10 +5,16 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Connect Commands", "Iv Misticos", "1.0.3")]
+    [Info("Discord Connect Commands", "Iv Misticos", "1.0.4")]
     [Description("Execute commands on Discord Connect events")]
     class DiscordConnectCommands : CovalencePlugin
     {
+        #region Variables
+
+        private StringBuilder _builder = new StringBuilder();
+        
+        #endregion
+        
         #region Configuration
 
         private static Configuration _config;
@@ -60,18 +66,16 @@ namespace Oxide.Plugins
 
         #region Methods
 
-        StringBuilder builder = new StringBuilder();
-
         private string FormatCommand(string command, string gameId, string discordId)
         {
-            builder.Length = 0;
-            return builder.Append(command).Replace("{gameId}", gameId).Replace("{discordId}", discordId).ToString();
+            _builder.Length = 0;
+            return _builder.Append(command).Replace("{gameId}", gameId).Replace("{discordId}", discordId).ToString();
         }
         private string FormatCommand(string command, string oldGameId, string newGameId, string oldDiscordId,
             string newDiscordId)
         {
-            builder.Length = 0;
-            return builder.Append(command).Replace("{oldGameId}", oldGameId)
+            _builder.Length = 0;
+            return _builder.Append(command).Replace("{oldGameId}", oldGameId)
                     .Replace("{newGameId}", newGameId).Replace("{oldDiscordId}", oldDiscordId)
                     .Replace("{newDiscordId}", newDiscordId).ToString();
         }
@@ -96,7 +100,7 @@ namespace Oxide.Plugins
 
         private void OnDiscordAuthLeave(string gameId, string discordId)
         {
-            foreach (var command in _config.CommandsConnect)
+            foreach (var command in _config.CommandsLeave)
                 ExecuteCommand(FormatCommand(command, gameId, discordId));
         }
         

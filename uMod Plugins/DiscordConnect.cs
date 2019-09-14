@@ -12,7 +12,7 @@ using Oxide.Ext.Discord.DiscordObjects;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Connect", "Iv Misticos", "1.0.10")]
+    [Info("Discord Connect", "Iv Misticos", "1.0.11")]
     [Description("Discord account connection with API")]
     public class DiscordConnect : CovalencePlugin
     {
@@ -293,7 +293,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                var canAuthenticate = Interface.Oxide.CallHook("CanDiscordAuthenticate", info.Key, message.author.id);
+                var canAuthenticate = Interface.Oxide.CallHook("CanDiscordAuthenticate", info.Player.Id, message.author.id);
                 if (canAuthenticate is bool && !(bool) canAuthenticate)
                 {
                     channel.CreateMessage(_client, GetMsg("Authentication Denied By Plugin", info.Player.Id));
@@ -313,7 +313,7 @@ namespace Oxide.Plugins
                     if (data1 != null)
                     {
                         channel.CreateMessage(_client, GetMsg("In-Game Overwrite", info.Player.Id));
-                        Interface.Oxide.CallHook("OnDiscordAuthOverwrite", data1.GameId, info.Key, data1.DiscordId,
+                        Interface.Oxide.CallHook("OnDiscordAuthOverwrite", data1.GameId, info.Player.Id, data1.DiscordId,
                             message.author.id);
                         
                         _data.Remove(data1);
@@ -322,7 +322,7 @@ namespace Oxide.Plugins
                     if (data2 != null)
                     {
                         channel.CreateMessage(_client, GetMsg("Discord Overwrite", info.Player.Id));
-                        Interface.Oxide.CallHook("OnDiscordAuthOverwrite", data2.GameId, info.Key, data2.DiscordId,
+                        Interface.Oxide.CallHook("OnDiscordAuthOverwrite", data2.GameId, info.Player.Id, data2.DiscordId,
                             message.author.id);
                         
                         _data.Remove(data2);
@@ -354,7 +354,7 @@ namespace Oxide.Plugins
                     info.Player.AddToGroup(_config.GroupConnected);
                 }
                 
-                Interface.Oxide.CallHook("OnDiscordAuthenticate", info.Key, message.author.id);
+                Interface.Oxide.CallHook("OnDiscordAuthenticate", info.Player.Id, message.author.id);
             });
         }
 
