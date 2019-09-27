@@ -1,88 +1,136 @@
 ﻿using System.Collections.Generic;
-using System;
+using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Inventory Cleaner", "PaiN", "1.1.4", ResourceId = 1226)]
-    [Description("This plugin allows players with permission to clean all/their/target's inventory.")]
-    class InventoryCleaner : RustPlugin
+    [Info("Inventory Cleaner", "Iv Misticos", "2.0.0")]
+    [Description("This plugin allows players with permission to clean inventories.")]
+    class InventoryCleaner : CovalencePlugin
     {
-        void Loaded() => permission.RegisterPermission(this.Name.ToLower() + ".use", this);
+        #region Variables
 
+        private const string PermissionSelf = "inventorycleaner.self";
+        private const string PermissionTarget = "inventorycleaner.target";
+        private const string PermissionAll = "inventorycleaner.all";
 
-        [ChatCommand("invcleanall")]
-        void cmdInvCleanAll(BasePlayer player, string cmd, string[] args)
+        private const string CommandName = "inventorycleaner.clean";
+
+        #endregion
+        
+        #region Hooks
+
+        protected override void LoadDefaultMessages()
         {
-
-            string steamId = Convert.ToString(player.userID);
-            if (permission.UserHasPermission(steamId, "inventorycleaner.use"))
+            lang.RegisterMessages(new Dictionary<string, string>
             {
-                if (args.Length == 1)
-                {
-                    SendReply(player, "Commands: \n/invcleanme => Cleans your inventory.\n/invclean \"player\" => Cleans the target's inventory\n/invcleanall => Cleans everyones invetory.");
-                    return;
-                }
-
-                var players = BasePlayer.activePlayerList as List<BasePlayer>;
-                foreach (BasePlayer current in BasePlayer.activePlayerList)
-                {
-                    current.inventory.Strip();
-                    Puts(player.displayName + " has cleaned all the inventories!");
-                    PrintToChat("<color=orange>[Inventory Cleaner]</color> " + player.displayName + " has cleaned all the inventories (" + players.Count + ") !");
-                    SendReply(player, "<color=orange>[Inventory Cleaner]</color> " + "You have cleaned " + players.Count + " inventories!");
-
-                }
-
-            }
-            else
-            {
-                SendReply(player, "You do not have permission to use this command!");
-                return;
-            }
+                { "No Permission", "You don't have enough permissions (inventorycleaner.*)." },
+                { "Syntax", "Command Syntax:\n" +
+                            "self - Clean your own inventory\n" +
+                            "all - Clean all players' inventories\n" +
+                            "(name or ID) - Clean specific player's inventory" },
+                { "Players Only", "This command is available only for players." },
+                { "Cleaned", "This inventory was successfully cleaned." },
+                { "Not Found", "This player was not found." }
+            }, this);
         }
 
-
-        [ChatCommand("invclean")]
-        void cmdInvClean(BasePlayer player, string cmd, string[] args)
+        private void Init()
         {
-            string steamId = Convert.ToString(player.userID);
-            if (permission.UserHasPermission(steamId, "inventorycleaner.use"))
+            permission.RegisterPermission(PermissionAll, this);
+            permission.RegisterPermission(PermissionSelf, this);
+            permission.RegisterPermission(PermissionTarget, this);
+            
+            AddCovalenceCommand(CommandName, nameof(CommandUse));
+        }
+
+        #endregion
+
+        #region Commands
+
+        private void CommandUse(IPlayer player, string command, string[] args)
+        {
+            if (args == null || args.Length == 0)
             {
-                if (args.Length == 0)
+                goto syntax;
+            }
+
+            switch (args[0].ToLower())
+            {
+                case "self":
                 {
-                    SendReply(player, "Commands: \n/invcleanme => Cleans your inventory.\n/invclean \"player\" => Cleans the target's inventory\n/invcleanall => Cleans everyones invetory.");
-                    return;
-                }
-                if (args.Length == 1)
-                {
-                    var target = BasePlayer.Find(args[0]);
-                    if (target == null)
+                    if (!player.HasPermission(PermissionSelf))
+                        goto noPermissions;
+
+                    if (!(player.Object is BasePlayer))
                     {
-                        SendReply(player, "Player not found!");
+                        player.Reply(GetMsg("Players Only", player.Id));
                         return;
                     }
-                    target.inventory.Strip();
-                    SendReply(player, "<color=orange>[Inventory Cleaner]</color> " + "You have successfully cleaned <color=cyan>" + target.displayName + "</color>'s inventory!");
+                    
+                    ((BasePlayer) player.Object).inventory.Strip();
+                    goto cleaned;
+                }
+
+                case "all":
+                {
+                    if (!player.HasPermission(PermissionAll))
+                        goto noPermissions;
+
+                    foreach (var user in players.Connected)
+                    {
+                        (user.Object as BasePlayer)?.inventory.Strip();
+                    }
+                    
+                    goto cleaned;
+                }
+
+                default:
+                {
+                    if (!player.HasPermission(PermissionTarget))
+                        goto noPermissions;
+                    
+                    var users = players.FindPlayers(args[0]);
+                    using (var enumerator = users.GetEnumerator())
+                    {
+                        var firstDone = false;
+                        while (enumerator.MoveNext())
+                        {
+                            if (!(enumerator.Current?.Object is BasePlayer))
+                                continue;
+                            
+                            firstDone = true;
+                            ((BasePlayer) enumerator.Current.Object).inventory.Strip();
+                        }
+
+                        if (!firstDone)
+                        {
+                            player.Reply(GetMsg("Not Found", player.Id));
+                            return;
+                        }
+                    }
+
+                    goto cleaned;
                 }
             }
-            else
-            {
-                SendReply(player, "You do not have permission to use this command!");
-                return;
-            }
-
+            
+            syntax:
+            player.Reply(GetMsg("Syntax", player.Id));
+            return;
+            
+            cleaned:
+            player.Reply(GetMsg("Cleaned", player.Id));
+            return;
+            
+            noPermissions:
+            player.Reply(GetMsg("No Permission", player.Id));
         }
 
-        [ChatCommand("invcleanme")]
-        void cmdInvCleanMe(BasePlayer player, string cmd, string[] args)
-        {
-            if (args.Length == 0)
-            {
-                player.inventory.Strip();
-                SendReply(player, "<color=orange>[Inventory Cleaner]</color> " + "You have cleaned your inventory!");
-            }
+        #endregion
+        
+        #region Helpers
 
-        }
+        private string GetMsg(string key, string userId = null) => lang.GetMessage(key, this, userId);
 
+        #endregion
     }
 }
