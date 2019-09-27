@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Info Menu", "Iv Misticos", "1.0.2")]
+    [Info("Info Menu", "Iv Misticos", "1.0.3")]
     [Description("Show server info and help with the ability to run popular commands")]
     class InfoMenu : RustPlugin
     {
@@ -666,7 +666,7 @@ namespace Oxide.Plugins
                     var tab = args.Length < 2 ? _config.DefaultTab : args[1];
 
                     InterfaceClose(basePlayer);
-                    InterfaceShow(basePlayer, tab);
+                    InterfaceShow(player, tab);
                     return;
                 }
 
@@ -719,11 +719,11 @@ namespace Oxide.Plugins
             _firstCached = true;
         }
 
-        private void InterfaceShow(BasePlayer player, string tabName)
+        private void InterfaceShow(IPlayer player, string tabName)
         {
             if (!_firstCached)
             {
-                player.ChatMessage(GetMsg("Initial Caching", player.UserIDString));
+                player.Reply(GetMsg("Initial Caching", player.Id));
                 
                 if (_firstCaching)
                     return;
@@ -743,7 +743,7 @@ namespace Oxide.Plugins
             foreach (var tab in _config.Tabs)
             {
                 if (tab.Name != tabName || !string.IsNullOrEmpty(tab.Permission) &&
-                    !player.IPlayer.HasPermission(tab.Permission))
+                    !player.HasPermission(tab.Permission))
                     continue;
 
                 selectedTab = tab;
@@ -752,7 +752,7 @@ namespace Oxide.Plugins
 
             if (selectedTab == null)
             {
-                player.ChatMessage(GetMsg("No Tab", player.UserIDString));
+                player.Reply(GetMsg("No Tab", player.Id));
                 return;
             }
 
@@ -772,21 +772,21 @@ namespace Oxide.Plugins
 
                 // Title text
                 _config.UI.MenuTitlePlaceholder
-                    ? _config.UI.GetMenuTitle(player.IPlayer)
+                    ? _config.UI.GetMenuTitle(player)
                     : _config.UI.ParsedMenuTitle
             };
 
             foreach (var button in _config.Buttons)
             {
-                InterfaceAddButton(player.IPlayer, container, button);
+                InterfaceAddButton(player, container, button);
             }
 
             foreach (var button in selectedTab.Buttons)
             {
-                InterfaceAddButton(player.IPlayer, container, button);
+                InterfaceAddButton(player, container, button);
             }
 
-            CuiHelper.AddUi(player, container);
+            CuiHelper.AddUi(player.Object as BasePlayer, container);
         }
 
         private void InterfaceAddButton(IPlayer player, CuiElementContainer container, Configuration.Button button)
