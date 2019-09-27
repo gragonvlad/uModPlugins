@@ -12,11 +12,20 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Info Menu", "Iv Misticos", "1.0.0")]
+    [Info("Info Menu", "Iv Misticos", "1.0.1")]
     [Description("Show server info and help with the ability to run popular commands")]
     class InfoMenu : RustPlugin
     {
         #region Variables
+
+        private const float InitialLoadDelay = 10f;
+
+        private bool _firstCached = false;
+        private bool _firstCaching = false;
+
+        private const string PermissionRecacheUI = "infomenu.recacheui";
+
+        private const string CommandRecacheUI = "infomenu.recacheui";
 
         private static InfoMenu _ins;
 
@@ -561,46 +570,42 @@ namespace Oxide.Plugins
                                       "close - Close UI"
                 },
                 {"Only Players", "This command is available only for players."},
-                {"No Tab", "Sorry, we couldn't find this tab. Report it to admins."}
+                {"No Tab", "Sorry, we couldn't find this tab (or you don't have enough permissions)."},
+                {"No Recache Permission", "You don't have enough permissions (infomenu.recacheui)."},
+                {"Recached", "All UI was successfully recached."},
+                {"Initial Caching", "Please, wait. UI is caching. It can take up to 10 seconds and it will be opened automatically."}
             }, this);
+        }
+
+        private void Init()
+        {
+            _ins = this;
+            
+            permission.RegisterPermission(PermissionRecacheUI, this);
+
+            foreach (var command in _config.Commands)
+            {
+                AddCovalenceCommand(command, nameof(CommandInfoMenu));
+            }
+            
+            AddCovalenceCommand(CommandRecacheUI, nameof(CommandInfoMenuRecacheUI));
         }
 
         private void OnServerInitialized()
         {
-            _ins = this;
-
             if (_config.UI.MenuBackgroundColor.IsLink)
             {
                 ImageLibraryLoad(_config.UI.MenuBackgroundName, _config.UI.MenuBackgroundColor.Link);
             }
-            else
-            {
-                _config.UI.ParsedMenuBackground = _config.UI.GetMenuBackground();
-            }
-
-            _config.UI.ParsedMenuBackgroundButton = _config.UI.GetMenuBackgroundButton();
 
             if (_config.UI.MenuColor.IsLink)
             {
                 ImageLibraryLoad(_config.UI.MenuName, _config.UI.MenuColor.Link);
             }
-            else
-            {
-                _config.UI.ParsedMenu = _config.UI.GetMenu();
-            }
 
             if (_config.UI.MenuTitleBackgroundColor.IsLink)
             {
                 ImageLibraryLoad(_config.UI.MenuTitleBackgroundName, _config.UI.MenuTitleBackgroundColor.Link);
-            }
-            else
-            {
-                _config.UI.ParsedMenuTitleBackground = _config.UI.GetMenuTitleBackground();
-            }
-
-            if (!_config.UI.MenuTitlePlaceholder)
-            {
-                _config.UI.ParsedMenuTitle = _config.UI.GetMenuTitle();
             }
 
             foreach (var button in _config.Buttons)
@@ -622,11 +627,6 @@ namespace Oxide.Plugins
                     }
                 }
             }
-
-            foreach (var command in _config.Commands)
-            {
-                AddCovalenceCommand(command, nameof(CommandInfoMenu));
-            }
         }
 
         private void Unload()
@@ -637,11 +637,24 @@ namespace Oxide.Plugins
             }
 
             _ins = null;
+            _config = null;
         }
 
         #endregion
 
         #region Commands
+
+        private void CommandInfoMenuRecacheUI(IPlayer player, string command, string[] args)
+        {
+            if (!player.HasPermission(PermissionRecacheUI))
+            {
+                player.Reply(GetMsg("No Recache Permission", player.Id));
+                return;
+            }
+            
+            CacheUI();
+            player.Reply(GetMsg("Recached", player.Id));
+        }
 
         private void CommandInfoMenu(IPlayer player, string command, string[] args)
         {
@@ -686,8 +699,58 @@ namespace Oxide.Plugins
 
         #region UI
 
+        private void CacheUI()
+        {
+            _config.UI.ParsedMenuBackground = _config.UI.GetMenuBackground();
+            _config.UI.ParsedMenuBackgroundButton = _config.UI.GetMenuBackgroundButton();
+            
+            _config.UI.ParsedMenu = _config.UI.GetMenu();
+            _config.UI.ParsedMenuTitleBackground = _config.UI.GetMenuTitleBackground();
+
+            if (!_config.UI.MenuTitlePlaceholder)
+            {
+                _config.UI.ParsedMenuTitle = _config.UI.GetMenuTitle();
+            }
+
+            foreach (var button in _config.Buttons)
+            {
+                CacheButton(button);
+            }
+
+            foreach (var tab in _config.Tabs)
+            {
+                foreach (var page in tab.Pages)
+                {
+                    foreach (var button in page.Buttons)
+                    {
+                        CacheButton(button);
+                    }
+                }
+            }
+            
+            _firstCached = true;
+        }
+
         private void InterfaceShow(BasePlayer player, string tabName)
         {
+            if (!_firstCached)
+            {
+                player.ChatMessage(GetMsg("Initial Caching", player.UserIDString));
+                
+                if (_firstCaching)
+                    return;
+
+                _firstCaching = true;
+                
+                timer.Once(InitialLoadDelay, () =>
+                {
+                    CacheUI();
+                    InterfaceShow(player, tabName);
+                });
+
+                return;
+            }
+
             Configuration.Tab selectedTab = null;
             foreach (var tab in _config.Tabs)
             {
@@ -708,20 +771,16 @@ namespace Oxide.Plugins
             var container = new CuiElementContainer
             {
                 // Menu background
-                _config.UI.MenuBackgroundColor.IsLink
-                    ? _config.UI.GetMenuBackground()
-                    : _config.UI.ParsedMenuBackground,
+                _config.UI.ParsedMenuBackground,
 
                 // Menu background button
                 _config.UI.ParsedMenuBackgroundButton,
 
                 // Menu itself
-                _config.UI.MenuColor.IsLink ? _config.UI.GetMenu() : _config.UI.ParsedMenu,
+                _config.UI.ParsedMenu,
 
                 // Title background
-                _config.UI.MenuTitleBackgroundColor.IsLink
-                    ? _config.UI.GetMenuTitleBackground()
-                    : _config.UI.ParsedMenuTitleBackground,
+                _config.UI.ParsedMenuTitleBackground,
 
                 // Title text
                 _config.UI.MenuTitlePlaceholder
@@ -750,7 +809,7 @@ namespace Oxide.Plugins
             if (!string.IsNullOrEmpty(button.Permission) && !player.HasPermission(button.Permission))
                 return;
 
-            container.Add(button.UI.Color.IsLink ? button.UI.GetButtonBackground() : button.UI.ParsedButtonBackground);
+            container.Add(button.UI.ParsedButtonBackground);
             container.Add(button.UI.ParsedButton);
             container.Add(button.UI.TextPlaceholder ? button.UI.GetButtonText(player) : button.UI.ParsedButtonText);
         }
@@ -779,16 +838,16 @@ namespace Oxide.Plugins
 
                 return false;
             });
-
+            
             if (button.UI.Color.IsLink)
             {
                 ImageLibraryLoad(button.UI.ButtonBackgroundName, button.UI.Color.Link);
             }
-            else
-            {
-                button.UI.ParsedButtonBackground = button.UI.GetButtonBackground();
-            }
+        }
 
+        private void CacheButton(Configuration.Button button)
+        {
+            button.UI.ParsedButtonBackground = button.UI.GetButtonBackground();
             button.UI.ParsedButton = button.UI.GetButton();
 
             if (!button.UI.TextPlaceholder)
