@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Info Menu", "Iv Misticos", "1.0.1")]
+    [Info("Info Menu", "Iv Misticos", "1.0.2")]
     [Description("Show server info and help with the ability to run popular commands")]
     class InfoMenu : RustPlugin
     {
@@ -52,7 +52,7 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Tabs", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<Tab> Tabs = new List<Tab> {new Tab()};
 
-            [JsonProperty(PropertyName = "Button", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            [JsonProperty(PropertyName = "Static Elements", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<Button> Buttons = new List<Button> {new Button()};
 
             [JsonProperty(PropertyName = "Default Tab")]
@@ -435,15 +435,9 @@ namespace Oxide.Plugins
 
                 [JsonProperty(PropertyName = "Permission")]
                 public string Permission = "infomenu.view";
-
-                [JsonProperty(PropertyName = "Pages", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-                public List<Page> Pages = new List<Page> {new Page()};
-
-                public class Page
-                {
-                    [JsonProperty(PropertyName = "Elements", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-                    public List<Button> Buttons = new List<Button> {new Button()};
-                }
+                
+                [JsonProperty(PropertyName = "Elements", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+                public List<Button> Buttons = new List<Button> {new Button()};
             }
 
             public class CommandData
@@ -619,12 +613,9 @@ namespace Oxide.Plugins
                 if (!string.IsNullOrEmpty(tab.Permission) && !permission.PermissionExists(tab.Permission))
                     permission.RegisterPermission(tab.Permission, this);
 
-                foreach (var page in tab.Pages)
+                foreach (var button in tab.Buttons)
                 {
-                    foreach (var button in page.Buttons)
-                    {
-                        SetupButton(button);
-                    }
+                    SetupButton(button);
                 }
             }
         }
@@ -719,12 +710,9 @@ namespace Oxide.Plugins
 
             foreach (var tab in _config.Tabs)
             {
-                foreach (var page in tab.Pages)
+                foreach (var button in tab.Buttons)
                 {
-                    foreach (var button in page.Buttons)
-                    {
-                        CacheButton(button);
-                    }
+                    CacheButton(button);
                 }
             }
             
@@ -793,12 +781,9 @@ namespace Oxide.Plugins
                 InterfaceAddButton(player.IPlayer, container, button);
             }
 
-            foreach (var page in selectedTab.Pages)
+            foreach (var button in selectedTab.Buttons)
             {
-                foreach (var button in page.Buttons)
-                {
-                    InterfaceAddButton(player.IPlayer, container, button);
-                }
+                InterfaceAddButton(player.IPlayer, container, button);
             }
 
             CuiHelper.AddUi(player, container);
