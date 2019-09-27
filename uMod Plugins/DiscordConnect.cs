@@ -111,7 +111,7 @@ namespace Oxide.Plugins
             {
                 for (var i = 0; i < _keys.Count; i++)
                 {
-                    if (_keys[i].Player.Id == userId)
+                    if (_keys[i].Player != null && _keys[i].Player.Id == userId)
                         return _keys[i];
                 }
 
@@ -131,7 +131,7 @@ namespace Oxide.Plugins
 
             public void ExpireMessage()
             {
-                Player.Reply(GetMsg("Code Expired", Player.Id), _config.Prefix);
+                Player?.Reply(GetMsg("Code Expired", Player?.Id), _config.Prefix);
             }
 
             public void ResetValidUntil()

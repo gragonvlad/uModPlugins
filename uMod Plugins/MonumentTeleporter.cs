@@ -1,3 +1,5 @@
+// Requires: MonumentFinder
+
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
@@ -7,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Monument Teleporter", "Iv Misticos", "1.0.0")]
+    [Info("Monument Teleporter", "Iv Misticos", "1.0.1")]
     [Description("Teleport to monuments found with Monument Finder")]
     class MonumentTeleporter : RustPlugin
     {
@@ -63,7 +65,6 @@ namespace Oxide.Plugins
             lang.RegisterMessages(new Dictionary<string, string>
             {
                 {"No Permission", "You don't have enough permissions"},
-                {"Monument Finder Not Found", "Monument Finder isn't loaded"},
                 {"Monument Not Found", "Monument not found"},
                 {"Position Not Found", "Position to spawn not found"},
                 {"Teleported", "You were teleported"},
@@ -94,12 +95,6 @@ namespace Oxide.Plugins
             if (player.Object == null)
             {
                 player.Reply(GetMsg("Only Players", player.Id));
-                return;
-            }
-
-            if (MonumentFinder == null || !MonumentFinder.IsLoaded)
-            {
-                player.Reply(GetMsg("Monument Finder Not Found", player.Id));
                 return;
             }
 
