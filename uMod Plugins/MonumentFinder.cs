@@ -8,19 +8,22 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Monument Finder", "misticos", "2.0.0")]
+    [Info("Monument Finder", "misticos", "2.0.1")]
     [Description("Find monuments with commands or API")]
     class MonumentFinder : CovalencePlugin
     {
+        #region Variables
+
+        private const string PermissionFind = "monumentfinder.find";
+        
+        #endregion
+        
         #region Configuration
         
         private static Configuration _config;
 
         private class Configuration
         {
-            [JsonProperty(PropertyName = "Usage Permission")]
-            public string Permission = "monumentfinder.find";
-            
             [JsonProperty(PropertyName = "Command")]
             public string Command = "mf";
         }
@@ -53,7 +56,7 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                {"No Permission", "You don't have enough permissions!"},
+                {"No Permission", "You don't have enough permissions (monumentfinder.find)"},
                 {"Find: Syntax", "Syntax: mf\n" +
                                  "list - List all available monuments and their centers\n" +
                                  "show (Name) - Show specific monument info"},
@@ -64,8 +67,7 @@ namespace Oxide.Plugins
 
         private void Init()
         {
-            if (!string.IsNullOrEmpty(_config.Permission))
-                permission.RegisterPermission(_config.Permission, this);
+            permission.RegisterPermission(PermissionFind, this);
 
             AddCovalenceCommand(_config.Command, nameof(CommandFind));
         }
@@ -76,7 +78,7 @@ namespace Oxide.Plugins
 
         private void CommandFind(IPlayer player, string command, string[] args)
         {
-            if (!string.IsNullOrEmpty(_config.Permission) && !player.HasPermission(_config.Permission))
+            if (!player.HasPermission(PermissionFind))
             {
                 player.Reply(GetMsg("No Permission", player.Id));
                 return;

@@ -11,9 +11,11 @@ namespace Oxide.Plugins
 {
     [Info("Monument Teleporter", "Iv Misticos", "1.0.1")]
     [Description("Teleport to monuments found with Monument Finder")]
-    class MonumentTeleporter : RustPlugin
+    class MonumentTeleporter : CovalencePlugin
     {
         #region Variables
+
+        private const string PermissionUse = "monumentteleporter.use";
 
         // ReSharper disable once InconsistentNaming
         [PluginReference]
@@ -29,9 +31,6 @@ namespace Oxide.Plugins
 
         private class Configuration
         {
-            [JsonProperty(PropertyName = "Usage Permission")]
-            public string Permission = "monumentteleporter.use";
-            
             [JsonProperty(PropertyName = "Command")]
             public string Command = "mtp";
         }
@@ -64,7 +63,7 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                {"No Permission", "You don't have enough permissions"},
+                {"No Permission", "You don't have enough permissions (monumentteleporter.use)"},
                 {"Monument Not Found", "Monument not found"},
                 {"Position Not Found", "Position to spawn not found"},
                 {"Teleported", "You were teleported"},
@@ -74,8 +73,7 @@ namespace Oxide.Plugins
 
         private void Init()
         {
-            if (!string.IsNullOrEmpty(_config.Permission))
-                permission.RegisterPermission(_config.Permission, this);
+            permission.RegisterPermission(PermissionUse, this);
             
             AddCovalenceCommand(_config.Command, nameof(CommandTeleport));
         }
@@ -86,7 +84,7 @@ namespace Oxide.Plugins
 
         private void CommandTeleport(IPlayer player, string command, string[] args)
         {
-            if (!string.IsNullOrEmpty(_config.Permission) && !player.HasPermission(_config.Permission))
+            if (!player.HasPermission(PermissionUse))
             {
                 player.Reply(GetMsg("No Permission", player.Id));
                 return;
