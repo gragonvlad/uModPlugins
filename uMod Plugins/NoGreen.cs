@@ -6,7 +6,7 @@ using Time = UnityEngine.Time;
 
 namespace Oxide.Plugins
 {
-    [Info("No Green", "Iv Misticos", "1.3.4")]
+    [Info("No Green", "Iv Misticos", "1.3.5")]
     [Description("Remove admins' green names")]
     class NoGreen : RustPlugin
     {
@@ -30,7 +30,7 @@ namespace Oxide.Plugins
             var chatEntry = new Chat.ChatEntry
             {
                 Message = message,
-                UserId = player.userID,
+                UserId = player.UserIDString,
                 Username = name,
                 Color = color,
                 Time = Epoch.Current
