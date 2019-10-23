@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using ConVar;
 using Newtonsoft.Json;
@@ -12,7 +13,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Loot Plus", "Iv Misticos", "2.2.2")]
+    [Info("Loot Plus", "Iv Misticos", "2.2.3")]
     [Description("Modify loot on your server.")]
     public class LootPlus : RustPlugin
     {
@@ -98,10 +99,10 @@ namespace Oxide.Plugins
             public bool ShuffleItems = true;
 
             [JsonProperty(PropertyName = "Allow Duplicate Items")]
-            public bool DuplicateItems = false;
+            public bool AllowDuplicateItems = false;
 
             [JsonProperty(PropertyName = "Allow Duplicate Items With Different Skins")]
-            public bool DuplicateItemsDifferentSkins = true;
+            public bool AllowDuplicateItemsDifferentSkins = true;
 
             [JsonProperty(PropertyName = "Remove Container")]
             public bool RemoveContainer = false;
@@ -132,6 +133,19 @@ namespace Oxide.Plugins
             
             [JsonProperty(PropertyName = "Items", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<ItemData> Items = new List<ItemData> {new ItemData()};
+
+            [JsonIgnore]
+            public List<ItemData.ShortnameData> IgnoredFillItemsShortnames = new List<ItemData.ShortnameData>();
+
+            public void FillIgnoredShortnames()
+            {
+                IgnoredFillItemsShortnames.Clear();
+                foreach (var item in Items)
+                {
+                    if (item.RemoveItem || item.ReplaceDefaultLoot)
+                        IgnoredFillItemsShortnames.AddRange(item.Shortnames);
+                }
+            }
 
             public bool ShortnameFits(string shortname, bool api)
             {
@@ -213,6 +227,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Remove Item")]
             public bool RemoveItem = false;
+
+            [JsonProperty(PropertyName = "Replace Item With Default Loot")]
+            public bool ReplaceDefaultLoot = false;
 
             [JsonProperty(PropertyName = "Conditions", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<ConditionData> Conditions = new List<ConditionData> {new ConditionData()};
@@ -564,6 +581,8 @@ namespace Oxide.Plugins
             }
             
             LoadConfig(); // What if something has changed there? :o
+            
+            _config.Containers.ForEach(x => x.FillIgnoredShortnames());
             player.Reply(GetMsg("Config Loaded", player.Id));
         }
 
@@ -584,7 +603,7 @@ namespace Oxide.Plugins
             }, this);
         }
 
-        private void OnServerInitialized()
+        private void Init()
         {
             permission.RegisterPermission(PermissionLootSave, this);
             permission.RegisterPermission(PermissionLootRefill, this);
@@ -598,10 +617,10 @@ namespace Oxide.Plugins
                     container.ShuffleItems = _config.ShuffleItems.Value;
                 
                 if (_config.DuplicateItems.HasValue)
-                    container.DuplicateItems = _config.DuplicateItems.Value;
+                    container.AllowDuplicateItems = _config.DuplicateItems.Value;
                 
                 if (_config.DuplicateItemsDifferentSkins.HasValue)
-                    container.DuplicateItemsDifferentSkins = _config.DuplicateItemsDifferentSkins.Value;
+                    container.AllowDuplicateItemsDifferentSkins = _config.DuplicateItemsDifferentSkins.Value;
 
                 if (container.Shortname != null)
                 {
@@ -718,10 +737,15 @@ namespace Oxide.Plugins
             
             SaveConfig();
 
+            _config.Containers.ForEach(x => x.FillIgnoredShortnames());
+
             AddCovalenceCommand(_config.LootSaveCommand, nameof(CommandLootSave));
             AddCovalenceCommand(_config.LootRefillCommand, nameof(CommandLootRefill));
             AddCovalenceCommand(_config.LoadConfigCommand, nameof(CommandLoadConfig));
+        }
 
+        private void OnServerInitialized()
+        {
             _initialized = true;
             
             if (!_config.RefillOnLoad)
@@ -939,20 +963,35 @@ namespace Oxide.Plugins
                 yield break;
             
             PrintDebug("Filling with default loot..");
-            
-            if (networkable == null || !(networkable is LootContainer))
+
+            var lootContainer = networkable as LootContainer;
+            if (lootContainer == null)
             {
-                PrintWarning("Tried to set vanilla loot, but it's not a loot container");
+                PrintDebug("Tried to set vanilla loot, but it's not a loot container");
                 yield break;
             }
 
-            var lootContainer = (LootContainer) networkable;
-            for (var i = 0; i < lootContainer.LootSpawnSlots.Length; i++)
+            var failures = 0;
+            while (inventory.itemList.Count < inventory.capacity && failures <= container.MaxRetries)
             {
-                lootContainer.LootSpawnSlots[i].numberToSpawn = inventory.capacity;
-            }
+                Item addedItem;
+                // No BLACKLISTED, DUPLICATE items or failures check
+                while ((IsItemBlacklisted(addedItem = GenerateDefaultItem(lootContainer),
+                            container.IgnoredFillItemsShortnames) ||
+                        IsItemDuplicate(inventory.itemList, addedItem, container)) &
+                       ++failures <= container.MaxRetries)
+                {
+                    addedItem.Remove();
+                }
 
-            lootContainer.PopulateLoot();
+                if (addedItem != null && failures <= container.MaxRetries)
+                {
+                    PrintDebug($"Inserting item. Failures: {failures}");
+                    inventory.Insert(addedItem);
+                }
+                else
+                    PrintDebug($"Skipping item, a lot of failures ({failures})");
+            }
         }
 
         private void HandleAPIFill(ItemContainer container, string apiShortname, int containerIndex)
@@ -991,7 +1030,7 @@ namespace Oxide.Plugins
 
                 var skin = ChanceData.Select(dataItem.Skins)?.Skin ?? 0UL;
 
-                if (!container.DuplicateItems) // Duplicate items are not allowed
+                if (!container.AllowDuplicateItems) // Duplicate items are not allowed
                 {
                     if (IsDuplicate(inventory.itemList, container, dataItem, skin))
                     {
@@ -1094,7 +1133,51 @@ namespace Oxide.Plugins
                     if (dataItem.RemoveItem)
                     {
                         PrintDebug("Removing item");
+                        
+                        foreach (var itemMod in item.info.itemMods)
+                            itemMod.OnRemove(item);
+                        
                         item.DoRemove();
+                        break;
+                    }
+
+                    if (dataItem.ReplaceDefaultLoot)
+                    {
+                        PrintDebug("Replacing item with default loot");
+
+                        foreach (var itemMod in item.info.itemMods)
+                            itemMod.OnRemove(item);
+
+                        item.DoRemove();
+                        
+                        var lootContainer = inventory.entityOwner as LootContainer;
+                        if (lootContainer == null)
+                        {
+                            PrintDebug(
+                                "Tried to change an item to another vanilla loot item, but it's not a loot container");
+                            
+                            break;
+                        }
+
+                        Item addedItem;
+                        var failures = 0;
+                        // No BLACKLISTED, DUPLICATE items or failure check
+                        while ((IsItemBlacklisted(addedItem = GenerateDefaultItem(lootContainer),
+                                    container.IgnoredFillItemsShortnames) ||
+                                IsItemDuplicate(inventory.itemList, addedItem, container)) &
+                               ++failures <= container.MaxRetries)
+                        {
+                            addedItem.Remove();
+                        }
+
+                        if (addedItem != null && failures <= container.MaxRetries)
+                        {
+                            PrintDebug($"Inserting item. Failures: {failures}");
+                            inventory.Insert(addedItem);
+                        }
+                        else
+                            PrintDebug($"Skipping item, a lot of failures ({failures})");
+
                         break;
                     }
 
@@ -1142,6 +1225,95 @@ namespace Oxide.Plugins
             }
         }
 
+        private static Item GenerateDefaultItem(LootContainer lootContainer)
+        {
+            var inventory = new ItemContainer();
+            inventory.ServerInitialize(null, 1);
+
+            if (lootContainer.LootSpawnSlots.Length != 0)
+            {
+                foreach (var lootSpawnSlot in lootContainer.LootSpawnSlots)
+                {
+                    for (var index = 0; index < lootSpawnSlot.numberToSpawn; ++index)
+                    {
+                        if (UnityEngine.Random.Range(0.0f, 1f) <= (double) lootSpawnSlot.probability)
+                            lootSpawnSlot.definition.SpawnIntoContainer(inventory);
+                    }
+                }
+            }
+            else if (lootContainer.lootDefinition != null)
+            {
+                for (var index = 0; index < lootContainer.maxDefinitionsToSpawn; ++index)
+                    lootContainer.lootDefinition.SpawnIntoContainer(inventory);
+            }
+                
+            var addedItem = inventory.itemList.FirstOrDefault();
+            if (addedItem == null)
+                return null;
+
+            // ReSharper disable once InvertIf
+            if (lootContainer.SpawnType == LootContainer.spawnType.ROADSIDE ||
+                lootContainer.SpawnType == LootContainer.spawnType.TOWN)
+            {
+                if (addedItem.hasCondition)
+                    addedItem.condition =
+                        UnityEngine.Random.Range(addedItem.info.condition.foundCondition.fractionMin,
+                            addedItem.info.condition.foundCondition.fractionMax) *
+                        addedItem.info.condition.max;
+            }
+
+            return addedItem;
+        }
+
+        private static bool IsItemDuplicate(IEnumerable<Item> items, Item origin, ContainerData container)
+        {
+            // In case duplicate items are allowed or item is null
+            if (container.AllowDuplicateItems || origin == null)
+                return false;
+
+            foreach (var item in items)
+            {
+                if (origin.IsBlueprint() != item.IsBlueprint())
+                    continue;
+
+                if (origin.IsBlueprint())
+                {
+                    if (origin.blueprintTargetDef.shortname != item.blueprintTargetDef.shortname)
+                        continue;
+                }
+                else
+                {
+                    if (origin.info.shortname != item.info.shortname)
+                        continue;
+                    
+                    if (container.AllowDuplicateItemsDifferentSkins && origin.skin != item.skin)
+                        continue;
+                }
+                
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsItemBlacklisted(Item item, IEnumerable<ItemData.ShortnameData> shortnameBlacklist)
+        {
+            if (item == null)
+                return false;
+
+            var shortname = item.IsBlueprint() ? item.blueprintTargetDef.shortname : item.info.shortname;
+
+            foreach (var blacklisted in shortnameBlacklist)
+            {
+                if (!blacklisted.FitsExpression(shortname))
+                    continue;
+                
+                return true;
+            }
+
+            return false;
+        }
+
         // Not used in modify
         private static bool IsDuplicate(IReadOnlyList<Item> list, ContainerData container, ItemData dataItem, ulong skin)
         {
@@ -1157,7 +1329,7 @@ namespace Oxide.Plugins
                 }
 
                 if (item.IsBlueprint() || item.info.shortname != dataItem.Shortname) continue;
-                if (container.DuplicateItemsDifferentSkins && item.skin != skin)
+                if (container.AllowDuplicateItemsDifferentSkins && item.skin != skin)
                     continue;
 
                 PrintDebug("Found a duplicate item");

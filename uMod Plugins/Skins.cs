@@ -290,7 +290,7 @@ namespace Oxide.Plugins
             if (container == null || player != null)
                 return;
             
-            PrintDebug($"OnItemAddedToContainer: {item.info.shortname} (at {item.position})");
+            PrintDebug($"OnItemAddedToContainer: {item.info.shortname} (slot {item.position})");
 
             if (itemContainer.itemList.Count != 1)
             {
@@ -313,15 +313,15 @@ namespace Oxide.Plugins
             if (item.parentItem != null)
                 return;
             
-            var player = itemContainer.entityOwner as BasePlayer;
             var container = ContainerController.Find(itemContainer);
-            if (container == null || player == null || container.Owner != player)
+            var player = itemContainer.entityOwner as BasePlayer;
+            if (player == null || container == null)
             {
                 return;
             }
 
-            PrintDebug($"OnItemRemovedFromContainer: {item.info.shortname} (at {item.position})");
-            
+            PrintDebug($"OnItemRemovedFromContainer: {item.info.shortname} (slot {item.position})");
+
             container.SetupContent(item);
             container.Clear();
         }
@@ -374,11 +374,11 @@ namespace Oxide.Plugins
             
             PrintDebug("Changing main item amount");
             var mainItem = controller.Container.GetSlot(0);
-            if (mainItem == null)
+            if (mainItem == null) // In case there is no "main item" in container we're moving from
                 return false; // Just cancel. Illegal!
             
             mainItem.amount = item.amount - amount; // Change main item amount and refresh content.
-                
+            
             // Next frame because else it will change already existing item which may result in a wrong amount of the item :(
             NextFrame(() => controller.UpdateContent(0));
             return null; // That's legal, we'll do everything
@@ -386,7 +386,7 @@ namespace Oxide.Plugins
 
         private object CanMoveItemTo(ContainerController controller, Item item, PlayerInventory playerLoot, int slot, int amount)
         {
-            var targetItem = controller?.Container.GetSlot(slot);
+            var targetItem = controller?.Container?.GetSlot(slot);
             if (targetItem != null)
             {
                 // Give target item back
