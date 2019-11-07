@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Newtonsoft.Json.Linq;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using UnityEngine;
@@ -117,7 +118,7 @@ namespace Oxide.Plugins
             if (basePlayer == null)
                 return;
             
-            basePlayer.ConsoleMessage(GetMonumentName(basePlayer.transform.position));
+            player.Reply(GetMonumentName(basePlayer.transform.position) ?? "None");
         }
 
         private void CommandCapacity(IPlayer player, string command, string[] args)
@@ -243,8 +244,11 @@ namespace Oxide.Plugins
             foreach (var monument in monuments)
             {
                 var obb = new OBB(monument.transform.position, Quaternion.identity, monument.Bounds);
-                if (obb.Contains(position))
+                if (obb.Contains(position) || monument.Bounds.Contains(position) || Vector3.Distance(position, monument.Bounds.center) <= monument.MinDistance)
                     return monument.name;
+                
+                if (monument.name.Contains("airfield"))
+                    Puts(JObject.FromObject(monument.Bounds).ToString());
             }
 
             return string.Empty;

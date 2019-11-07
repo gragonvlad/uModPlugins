@@ -13,7 +13,7 @@ using Time = Oxide.Core.Libraries.Time;
 
 namespace Oxide.Plugins
 {
-    [Info("Smart Chat Bot", "Iv Misticos", "2.0.9")]
+    [Info("Smart Chat Bot", "Iv Misticos", "2.0.10")]
     [Description("I send chat messages based on some triggers or time.")]
     class SmartChatBot : RustPlugin
     {
@@ -69,16 +69,16 @@ namespace Oxide.Plugins
             public int MaxTime = 5;
 
             [JsonProperty(PropertyName = "Welcome Message", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public List<string> WelcomeMessage = new List<string> { "Welcome, {name}!", "Hello, dear {name}!", "Hello, {name}! Your IP: {ip}" };
+            public List<string> WelcomeMessage = new List<string> { "Welcome, {name}!", "Hello, dear {name}!", "Hello, {name}! Your IP: { ip }" };
 
             [JsonProperty(PropertyName = "Welcome Message Enabled")]
             public bool WelcomeMessageEnabled = false;
 
             [JsonProperty(PropertyName = "Joining Message", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public List<string> JoiningMessage = new List<string> { "Welcome, {name} ({id}, {ip})!", "Hello, dear {name} ({id}, {ip})!", "{name} came from {country} ({countrycode})" };
+            public List<string> JoiningMessage = new List<string> { "Welcome, {name} ({id}, { ip })!", "Hello, dear {name} ({id}, { ip })!", "{name} came from {country} ({countrycode})" };
 
             [JsonProperty(PropertyName = "Leaving Message", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public List<string> LeavingMessage = new List<string> { "Bye, {name} ({id}, {ip})!\nReason: {reason}", "{name} ({id}, {ip}) left the game. Reason: {reason}", "{name} from {country} ({countrycode}) just left the game!" };
+            public List<string> LeavingMessage = new List<string> { "Bye, {name} ({id}, { ip })!\nReason: {reason}", "{name} ({id}, { ip }) left the game. Reason: {reason}", "{name} from {country} ({countrycode}) just left the game!" };
 
             [JsonProperty(PropertyName = "Joining Message Enabled")]
             public bool JoiningMessageEnabled = false;
@@ -416,9 +416,7 @@ namespace Oxide.Plugins
         // ReSharper disable once SuggestBaseTypeForParameter
         private void Publish(string message, string perm = "", BasePlayer player2 = null, bool exclude = true)
         {
-            PrintDebug("Called Publish");
-            PrintDebug($"Message: {message}");
-            PrintDebug($"Permission: {perm}");
+            PrintDebug($"Called Publish (Message: {message}; Permission: {perm})");
             var notRequirePermission = string.IsNullOrEmpty(perm);
             message = FormatMessage(message);
 
@@ -440,8 +438,11 @@ namespace Oxide.Plugins
 
         private void Publish(BasePlayer player, string message) => SendMessage(player, FormatMessage(message));
 
-        private void SendMessage(BasePlayer player, string message) =>
-            player.SendConsoleCommand("chat.add", _config.ChatSteamID, message);
+        private void SendMessage(BasePlayer player, string message)
+        {
+            PrintDebug($"SengMessage: {message}");
+            player.SendConsoleCommand("chat.add", 2, _config.ChatSteamID, message);
+        }
 
         private string FormatMessage(string message) => _config.ShowPrefix ? _config.Prefix + message : message;
         

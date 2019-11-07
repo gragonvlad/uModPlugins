@@ -1,3 +1,4 @@
+using System;
 using ConVar;
 using Facepunch;
 using Facepunch.Math;
@@ -6,56 +7,90 @@ using Time = UnityEngine.Time;
 
 namespace Oxide.Plugins
 {
-    [Info("No Green", "Iv Misticos", "1.3.5")]
+    [Info("No Green", "Iv Misticos", "1.3.6")]
     [Description("Remove admins' green names")]
     class NoGreen : RustPlugin
     {
-        private object OnPlayerChat(ConsoleSystem.Arg arg)
+        private bool OnPlayerChat(ConsoleSystem.Arg arg)
         {
-            var player = (BasePlayer)arg.Connection.player;
-            if (player == null || !player.IsAdmin)
-                return null;
+            if (!Chat.enabled)
+            {
+                arg.ReplyWith("Chat is disabled.");
+                return true;
+            }
             
-            var message = arg.GetString(0).EscapeRichText(); // That's what devs use
-            var name = player.displayName.EscapeRichText();
-            var color = "#5af";
-            
+            var basePlayer = arg.Player();
+            var chatChannel = (Chat.ChatChannel)arg.GetInt(0);
+            var text = arg.GetString(1, "text").Replace("\n", "").Replace("\r", "").Trim();
+			
+            if (text.Length > 128)
+            {
+                text = text.Substring(1, 128);
+            }
+			
+            if (text.Length <= 0)
+            {
+                return true;
+            }
+			
             if (Chat.serverlog)
             {
-                DebugEx.Log($"[CHAT] {player} : {message}", StackTraceLogType.None);
+                ServerConsole.PrintColoured(ConsoleColor.DarkYellow, string.Concat("[", chatChannel.ToString(), "] ", basePlayer.displayName, ": "), ConsoleColor.DarkGreen, text);
+                DebugEx.Log(chatChannel == Chat.ChatChannel.Team
+                    ? $"[TEAM CHAT] {basePlayer} : {text}"
+                    : $"[CHAT] {basePlayer} : {text}");
             }
-            
-            player.NextChatTime = Time.realtimeSinceStartup + 1.5f;
-            
+				
+            var nameColor = "#5af";
+            var name = basePlayer.displayName.EscapeRichText();
+            basePlayer.NextChatTime = Time.realtimeSinceStartup + 1.5f;
             var chatEntry = new Chat.ChatEntry
             {
-                Message = message,
-                UserId = player.UserIDString,
-                Username = name,
-                Color = color,
+                Channel = chatChannel,
+                Message = text,
+                UserId = basePlayer.UserIDString,
+                Username = basePlayer.displayName,
+                Color = nameColor,
                 Time = Epoch.Current
             };
-            
+				
             RCon.Broadcast(RCon.LogType.Chat, chatEntry);
-            
-            if (ConVar.Server.globalchat)
+				
+            if (chatChannel != Chat.ChatChannel.Global)
             {
-                ConsoleNetwork.BroadcastToAllClients("chat.add2", player.userID, message, name, color, 1f);
-            }
-            else
-            {
-                var num2 = 2500f;
-                foreach (var target in BasePlayer.activePlayerList)
+                if (chatChannel == Chat.ChatChannel.Team)
                 {
-                    var sqrMagnitude = (target.transform.position - player.transform.position).sqrMagnitude;
-                    if (sqrMagnitude <= num2)
+                    var team = arg.Player().Team;
+						
+                    var list = team?.GetOnlineMemberConnections();
+                    if (list == null)
                     {
-                        ConsoleNetwork.SendClientCommand(target.net.connection, "chat.add2", player.userID,
-                            message, name, color, Mathf.Clamp01(num2 - sqrMagnitude + 0.2f));
+                        return true;
                     }
+						
+                    ConsoleNetwork.SendClientCommand(list, "chat.add2", 1, basePlayer.userID, text, name, nameColor, 1f);
+						
+                    return true;
                 }
             }
-
+            else if (ConVar.Server.globalchat)
+            {
+                ConsoleNetwork.BroadcastToAllClients("chat.add2", 0, basePlayer.userID, text, name, nameColor, 1f);
+                arg.ReplyWith("");
+                return true;
+            }
+				
+            var radius = 2500f;
+            foreach (var basePlayer2 in BasePlayer.activePlayerList)
+            {
+                var sqrMagnitude = (basePlayer2.transform.position - basePlayer.transform.position).sqrMagnitude;
+                if (sqrMagnitude <= radius)
+                {
+                    ConsoleNetwork.SendClientCommand(basePlayer2.net.connection, "chat.add2", 0, basePlayer.userID, text, name, nameColor, Mathf.Clamp01(radius - sqrMagnitude + 0.2f));
+                }
+            }
+				
+            arg.ReplyWith("");
             return true;
         }
     }
