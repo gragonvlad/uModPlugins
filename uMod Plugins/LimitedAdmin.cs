@@ -3,124 +3,119 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using Oxide.Core;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace Oxide.Plugins
 {
-    [Info("Limited Admin", "Iv Misticos", "1.0.5")]
+    [Info("Limited Admin", "Iv Misticos", "1.0.6")]
     [Description("Prevents admin abuse by blocking actions and commands")]
     class LimitedAdmin : RustPlugin
     {
         #region Configuration
-        
+
         private Configuration _config = new Configuration();
 
         private class Configuration
         {
-            [JsonProperty(PropertyName = "Limited Admins (SteamID)", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            [JsonProperty(PropertyName = "Limited Admins (SteamID)",
+                ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<ulong> Admins = new List<ulong>
             {
                 76000000000000
             };
 
-            [JsonProperty(PropertyName = "Limited Auth Levels", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            [JsonProperty(PropertyName = "Limited Auth Levels",
+                ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<uint> LimitedAuthLevels = new List<uint>
             {
                 1, 2
             };
-            
-            [JsonProperty(PropertyName = "Whitelisted Admins (SteamID)", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+
+            [JsonProperty(PropertyName = "Whitelisted Admins (SteamID)",
+                ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<ulong> ExcludedAdmins = new List<ulong>
             {
                 76000000000000
             };
 
             [JsonProperty(PropertyName = "Limit All Admins Exclude Whitelisted")]
-            public bool LimitAll = false;
-            
+            public bool LimitAll = true;
+
             [JsonProperty(PropertyName = "Blocked Commands", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<string> Blacklist = new List<string>
             {
                 "chat.say"
             };
-            
+
             [JsonProperty(PropertyName = "Can Loot Entity")]
             public bool CanLootEntity = false;
-            
+
             [JsonProperty(PropertyName = "Can Loot Player")]
             public bool CanLootPlayer = false;
-            
+
             [JsonProperty(PropertyName = "Can Pickup Entity")]
             public bool CanPickupEntity = false;
-            
+
             [JsonProperty(PropertyName = "Can Rename Bed")]
             public bool CanRenameBed = false;
-            
+
             [JsonProperty(PropertyName = "Can Use Locked Entity")]
             public bool CanUseLockedEntity = false;
-            
-            [JsonProperty(PropertyName = "Can Unlock")]
-            public bool CanUnlock = false;
-            
+
+            [JsonProperty(PropertyName = "Can Interact With Lock")]
+            public bool CanInteractLock = false;
+
             [JsonProperty(PropertyName = "Can Use Voice Chat")]
             public bool CanUseVoiceChat = false;
-            
+
             [JsonProperty(PropertyName = "Can Be Targeted")]
             public bool CanBeTargeted = false;
-            
+
             [JsonProperty(PropertyName = "Can Build")]
             public bool CanBuild = false;
-            
-            [JsonProperty(PropertyName = "Can Change Code")]
-            public bool CanChangeCode = false;
-            
-            [JsonProperty(PropertyName = "Can Demolish")]
-            public bool CanDemolish = false;
-            
+
+            [JsonProperty(PropertyName = "Can Interact With Structure")]
+            public bool CanInteractStructure = false;
+
             [JsonProperty(PropertyName = "Can Hack CH47 Crate")]
             public bool CanHackCrate = false;
-            
+
             [JsonProperty(PropertyName = "Can Interact With Item")]
             public bool CanInteractItem = false;
-            
+
             [JsonProperty(PropertyName = "Can Pickup Item")]
             public bool CanItemPickup = false;
-            
-            [JsonProperty(PropertyName = "Can Be Visible")]
-            public bool CanNetworkTo = false;
-            
+
             [JsonProperty(PropertyName = "Can Damage")]
             public bool CanDamage = false;
-            
+
             [JsonProperty(PropertyName = "Can Use Lift")]
             public bool CanUseLift = false;
-            
+
             [JsonProperty(PropertyName = "Can Toggle Oven")]
             public bool CanToggleOven = false;
-            
+
             [JsonProperty(PropertyName = "Can Toggle Recycler")]
             public bool CanToggleRecycler = false;
-            
+
             [JsonProperty(PropertyName = "Can Interact With Turret")]
             public bool CanInteractTurret = false;
-            
+
             [JsonProperty(PropertyName = "Can Gather")]
             public bool CanGather = false;
-            
+
             [JsonProperty(PropertyName = "Can Update Sign")]
             public bool CanUpdateSign = false;
-            
-            [JsonProperty(PropertyName = "Can Enter Code")]
-            public bool CanEnterCode = false;
-            
+
             [JsonProperty(PropertyName = "Can Interact With Cupboard")]
             public bool CanInteractCupboard = false;
-            
+
             [JsonProperty(PropertyName = "Can Interact With Vending Machine")]
             public bool CanInteractVending = false;
-            
+
             [JsonProperty(PropertyName = "Can Interact With Weapons")]
             public bool CanInteractWeapons = false;
-            
+
             [JsonProperty(PropertyName = "Debug")]
             public bool Debug = false;
         }
@@ -143,36 +138,28 @@ namespace Oxide.Plugins
         protected override void LoadDefaultConfig() => _config = new Configuration();
 
         protected override void SaveConfig() => Config.WriteObject(_config);
-        
+
         #endregion
-        
+
         #region Hooks
 
         private void OnServerInitialized()
         {
             if (_config.CanLootEntity)
-            { // not sure how it works so i use it like thus
                 Unsubscribe(nameof(CanLootEntity));
-                Unsubscribe(nameof(CanLootEntity));
-                Unsubscribe(nameof(CanLootEntity));
-                Unsubscribe(nameof(CanLootEntity));
-            }
 
             if (_config.CanLootPlayer)
                 Unsubscribe(nameof(CanLootPlayer));
-            
+
             if (_config.CanPickupEntity)
                 Unsubscribe(nameof(CanPickupEntity));
-            
+
             if (_config.CanRenameBed)
                 Unsubscribe(nameof(CanRenameBed));
-            
+
             if (_config.CanUseLockedEntity)
                 Unsubscribe(nameof(CanUseLockedEntity));
-            
-            if (_config.CanUnlock)
-                Unsubscribe(nameof(CanUnlock));
-            
+
             if (_config.CanUseVoiceChat)
                 Unsubscribe(nameof(OnPlayerVoice));
 
@@ -189,33 +176,29 @@ namespace Oxide.Plugins
 
             if (_config.CanBuild)
                 Unsubscribe(nameof(CanBuild));
-            
-            if (_config.CanChangeCode)
-                Unsubscribe(nameof(CanChangeCode));
-            
-            if (_config.CanDemolish)
-                Unsubscribe(nameof(CanDemolish));
-            
+
+            if (_config.CanInteractStructure)
+            {
+                Unsubscribe(nameof(OnStructureDemolish));
+                Unsubscribe(nameof(OnStructureRepair));
+                Unsubscribe(nameof(OnStructureUpgrade));
+                Unsubscribe(nameof(OnStructureRotate));
+            }
+
             if (_config.CanHackCrate)
                 Unsubscribe(nameof(CanHackCrate));
-            
+
             if (_config.CanInteractItem)
                 Unsubscribe(nameof(OnItemAction));
-            
+
             if (_config.CanItemPickup)
                 Unsubscribe(nameof(OnItemPickup));
-            
-            if (_config.CanNetworkTo)
-                Unsubscribe(nameof(CanNetworkTo));
-            
+
             if (_config.CanDamage)
                 Unsubscribe(nameof(OnEntityTakeDamage));
 
             if (_config.CanUseLift)
-            {
                 Unsubscribe(nameof(OnLiftUse));
-                Unsubscribe(nameof(OnLiftUse));
-            }
 
             if (_config.CanToggleOven)
                 Unsubscribe(nameof(OnOvenToggle));
@@ -237,12 +220,17 @@ namespace Oxide.Plugins
                 Unsubscribe(nameof(OnDispenserBonus));
                 Unsubscribe(nameof(OnDispenserGather));
             }
-            
+
             if (_config.CanUpdateSign)
                 Unsubscribe(nameof(CanUpdateSign));
-            
-            if (_config.CanEnterCode)
+
+            if (_config.CanInteractLock)
+            {
+                Unsubscribe(nameof(CanLock));
+                Unsubscribe(nameof(CanUnlock));
                 Unsubscribe(nameof(OnCodeEntered));
+                Unsubscribe(nameof(CanChangeCode));
+            }
 
             if (_config.CanInteractCupboard)
             {
@@ -276,24 +264,15 @@ namespace Oxide.Plugins
             var command = arg.cmd.FullName;
             return _config.Blacklist.Contains(command) ? false : (object) null;
         }
-        
+
         #region Can Loot Entity
 
-        private object CanLootEntity(BasePlayer player, DroppedItemContainer container) =>
+        private object CanLootEntity(BasePlayer player, Object container) =>
             IsLimited(player) ? false : (object) null;
 
-        private object CanLootEntity(BasePlayer player, LootableCorpse container) =>
-            IsLimited(player) ? false : (object) null;
-
-        private object CanLootEntity(BasePlayer player, ResourceContainer container) =>
-            IsLimited(player) ? false : (object) null;
-
-        private object CanLootEntity(BasePlayer player, StorageContainer container) =>
-            IsLimited(player) ? false : (object) null;
-        
         #endregion
 
-        private object CanLootPlayer(BasePlayer looter, BasePlayer target) => IsLimited(looter) ? false : (object) null;
+        private object CanLootPlayer(BasePlayer target, BasePlayer looter) => IsLimited(looter) ? false : (object) null;
 
         private object CanPickupEntity(BasePlayer player, BaseCombatEntity entity) =>
             IsLimited(player) ? false : (object) null;
@@ -304,10 +283,8 @@ namespace Oxide.Plugins
         private object CanUseLockedEntity(BasePlayer player, BaseLock baseLock) =>
             IsLimited(player) ? false : (object) null;
 
-        private object CanUnlock(BasePlayer player, BaseLock baseLock) => IsLimited(player) ? false : (object) null;
-
         private object OnPlayerVoice(BasePlayer player, byte[] data) => IsLimited(player) ? false : (object) null;
-        
+
         #region Can Be Targeted
 
         private object CanBeTargeted(BaseCombatEntity entity, MonoBehaviour behaviour)
@@ -331,7 +308,7 @@ namespace Oxide.Plugins
 
         private object CanHelicopterTarget(PatrolHelicopterAI heli, BasePlayer player) =>
             IsLimited(player) ? false : (object) null;
-        
+
         private object OnNpcPlayerTarget(NPCPlayerApex npcPlayer, BaseEntity entity)
         {
             var player = entity as BasePlayer;
@@ -339,7 +316,7 @@ namespace Oxide.Plugins
                 ? (object) null
                 : false;
         }
-        
+
         private object OnNpcTarget(BaseNpc npc, BaseEntity entity)
         {
             var player = entity as BasePlayer;
@@ -355,17 +332,27 @@ namespace Oxide.Plugins
                 ? (object) null
                 : false;
         }
-        
+
         #endregion
 
-        private object CanBuild(BaseEntity planner, Construction prefab, Construction.Target target) =>
-            IsLimited(BasePlayer.FindByID(planner.OwnerID)) ? false : (object) null;
+        private object CanBuild(Planner planner, Construction prefab, Construction.Target target) =>
+            IsLimited(planner.GetOwnerPlayer()) ? false : (object) null;
 
-        private object CanChangeCode(CodeLock codeLock, BasePlayer player, string newCode, bool isGuestCode) =>
+        #region Can Interact With Structure
+
+        private object OnStructureDemolish(BaseCombatEntity entity, BasePlayer player, bool immediate) =>
             IsLimited(player) ? false : (object) null;
 
-        private object CanDemolish(BasePlayer player, BuildingBlock block, BuildingGrade.Enum grade) =>
+        private object OnStructureRepair(BaseCombatEntity entity, BasePlayer player, bool immediate) =>
             IsLimited(player) ? false : (object) null;
+
+        private object OnStructureRotate(BaseCombatEntity entity, BasePlayer player, bool immediate) =>
+            IsLimited(player) ? false : (object) null;
+
+        private object OnStructureUpgrade(BaseCombatEntity entity, BasePlayer player, bool immediate) =>
+            IsLimited(player) ? false : (object) null;
+
+        #endregion
 
         private object CanHackCrate(BasePlayer player, HackableLockedCrate crate) =>
             IsLimited(player) ? false : (object) null;
@@ -374,14 +361,6 @@ namespace Oxide.Plugins
             IsLimited(player) ? false : (object) null;
 
         private object OnItemPickup(Item item, BasePlayer player) => IsLimited(player) ? false : (object) null;
-
-        private object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
-        {
-            var player = entity as BasePlayer;
-            return player == null || player.IsNpc || player.net?.connection == null || !IsLimited(player)
-                ? (object) null
-                : false;
-        }
 
         private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
@@ -393,9 +372,7 @@ namespace Oxide.Plugins
 
         #region Can Use Lift
 
-        private object OnLiftUse(Lift lift, BasePlayer player) => IsLimited(player) ? false : (object) null;
-
-        private object OnLiftUse(ProceduralLift lift, BasePlayer player) => IsLimited(player) ? false : (object) null;
+        private object OnLiftUse(Object lift, BasePlayer player) => IsLimited(player) ? false : (object) null;
 
         #endregion
 
@@ -403,9 +380,9 @@ namespace Oxide.Plugins
 
         private object OnRecyclerToggle(Recycler recycler, BasePlayer player) =>
             IsLimited(player) ? false : (object) null;
-        
+
         #region Can Interact With Turret
-        
+
         private object OnTurretAuthorize(AutoTurret turret, BasePlayer player) =>
             IsLimited(player) ? false : (object) null;
 
@@ -414,9 +391,9 @@ namespace Oxide.Plugins
 
         private object OnTurretDeauthorize(AutoTurret turret, BasePlayer player) =>
             IsLimited(player) ? false : (object) null;
-        
+
         #endregion
-        
+
         #region Can Gather
 
         private object OnCollectiblePickup(Item item, BasePlayer player) => IsLimited(player) ? false : (object) null;
@@ -434,13 +411,27 @@ namespace Oxide.Plugins
                 ? (object) null
                 : false;
         }
-        
+
         #endregion
 
-        private object CanUpdateSign(BasePlayer player, Signage sign) => IsLimited(player) ? false : (object) null;
+        private object CanUpdateSign(BasePlayer player, Signage sign) => IsLimited(player) ? (object) false : null;
+
+        #region Can Interact With Lock
+
+        private object CanLock(BasePlayer player, BaseLock baseLock) => IsLimited(player) ? false : (object) null; 
+
+        private object CanUnlock(BasePlayer player, BaseLock baseLock) => IsLimited(player) ? false : (object) null;
 
         private object OnCodeEntered(CodeLock codeLock, BasePlayer player, string code) =>
             IsLimited(player) ? false : (object) null;
+
+        private object CanChangeCode(CodeLock codeLock, BasePlayer player, string newCode, bool isGuestCode) =>
+            IsLimited(player) ? false : (object) null;
+
+        private object CanPickupLock(BasePlayer player, BaseLock baseLock) =>
+            IsLimited(player) ? false : (object) null;
+        
+        #endregion
         
         #region Can Interact With Cupboard
 
@@ -497,16 +488,14 @@ namespace Oxide.Plugins
         {
             if (player == null || player.net?.connection == null)
                 return false;
-            
-            PrintDebug($"IsLimited ({player.displayName} / {player.UserIDString})");
-            
+
             if (_config.Admins.Contains(player.userID))
                 return true;
 
             if (_config.LimitAll && _config.ExcludedAdmins.Contains(player.userID))
                 return false;
 
-            if (_config.LimitedAuthLevels.Contains(player.net.connection.authLevel))
+            if (_config.LimitAll && _config.LimitedAuthLevels.Contains(player.net.connection.authLevel))
                 return true;
 
             return false;
