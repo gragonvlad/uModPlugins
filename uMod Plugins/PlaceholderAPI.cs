@@ -7,7 +7,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Placeholder API", "Iv Misticos", "1.0.2")]
+    [Info("Placeholder API", "Iv Misticos", "1.0.3")]
     [Description("API for placeholders in plugins' messages")]
     class PlaceholderAPI : CovalencePlugin
     {
@@ -54,7 +54,7 @@ namespace Oxide.Plugins
         
         #region Temporary data
 
-        private static PluginData _data = new PluginData();
+        private PluginData _data = new PluginData();
         
         private class PluginData
         {
@@ -98,6 +98,9 @@ namespace Oxide.Plugins
         [HookMethod(nameof(ProcessPlaceholders))]
         private void ProcessPlaceholders(IPlayer player, StringBuilder builder)
         {
+            if (builder == null)
+                return;
+            
             foreach (var placeholder in _data.Placeholders)
             {
                 placeholder.Action?.Invoke(player, builder);

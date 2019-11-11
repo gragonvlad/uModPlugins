@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using ConVar;
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
+using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Libraries;
 using UnityEngine;
 using Random = System.Random;
@@ -13,11 +15,17 @@ using Time = Oxide.Core.Libraries.Time;
 
 namespace Oxide.Plugins
 {
-    [Info("Smart Chat Bot", "Iv Misticos", "2.0.10")]
+    [Info("Smart Chat Bot", "Iv Misticos", "2.0.11")]
     [Description("I send chat messages based on some triggers or time.")]
     class SmartChatBot : RustPlugin
     {
         #region Variables
+
+        [PluginReference]
+        // ReSharper disable once InconsistentNaming
+        #pragma warning disable 649
+        private Plugin PlaceholderAPI;
+        #pragma warning restore 649
 
         private static readonly Random Random = new Random();
         private readonly Dictionary<BasePlayer, uint> _lastSent = new Dictionary<BasePlayer, uint>();
@@ -297,14 +305,14 @@ namespace Oxide.Plugins
             return HandleChatMessage(player, message);
         }
 
-        private object OnPlayerChat(ConsoleSystem.Arg arg)
+        private object OnPlayerChat(ConsoleSystem.Arg arg, Chat.ChatChannel channel)
         {
             PrintDebug("Called OnPlayerChat");
             var player = arg.Player();
-            if (player == null || !arg.HasArgs())
+            if (player == null || !arg.HasArgs() || channel != Chat.ChatChannel.Global)
                 return null;
 
-            return HandleChatMessage(player, string.Join(" ", arg.Args));
+            return HandleChatMessage(player, arg.GetString(0));
         }
 
         private void OnPlayerInit(BasePlayer player)
@@ -429,11 +437,11 @@ namespace Oxide.Plugins
                     var player = players[i];
                     if (player != player2 &&
                         (notRequirePermission || permission.UserHasPermission(player.UserIDString, perm)))
-                        SendMessage(player, message);
+                        SendMessage(player, RunPlaceholders(player.IPlayer, message));
                 }
             }
             else
-                SendMessage(player2, message);
+                SendMessage(player2, RunPlaceholders(player2?.IPlayer, message));
         }
 
         private void Publish(BasePlayer player, string message) => SendMessage(player, FormatMessage(message));
@@ -445,6 +453,16 @@ namespace Oxide.Plugins
         }
 
         private string FormatMessage(string message) => _config.ShowPrefix ? _config.Prefix + message : message;
+
+        private string RunPlaceholders(IPlayer player, string message)
+        {
+            if (PlaceholderAPI == null || !PlaceholderAPI.IsLoaded)
+                return message;
+            
+            var builder = new StringBuilder(message);
+            PlaceholderAPI.CallHook("ProcessPlaceholders", player, builder);
+            return builder.ToString();
+        }
         
         #endregion
         
