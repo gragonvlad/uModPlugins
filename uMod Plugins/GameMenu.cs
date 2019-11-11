@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Game Menu", "Iv Misticos", "1.0.6")]
+    [Info("Game Menu", "Iv Misticos", "1.0.8")]
     [Description("Create your own GUI menu with buttons and title.")]
     class GameMenu : RustPlugin
     {
