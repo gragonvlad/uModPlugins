@@ -1,555 +1,463 @@
-﻿// Requires: Discord
-
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Text;
+using System.Text.RegularExpressions;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Oxide.Core;
-using Oxide.Core.Plugins;
+using Oxide.Core.Libraries;
 using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("DiscordReport", "Bobakanoosh", "0.8.0", ResourceId = 2323)]
+    [Info("Discord Report", "Iv Misticos", "1.0.0")]
     [Description("Send reports from players ingame to a Discord channel")]
-
-    public class DiscordReport : CovalencePlugin
+    class DiscordReport : CovalencePlugin
     {
-        [PluginReference]
-        Plugin Discord;
+        #region Variables
 
-        #region Initialization
+        private static DiscordReport _ins;
 
-        // Defining permission variables
-        private const string permUse = "discordreport.use";
-        private const string permAdmin = "discordreport.admin";
-        private const string permIsBlocked = "discordreport.isblocked";
-        private const string permIsImmune = "discordreport.isimmune";
+        private const string SteamProfileXML = "https://steamcommunity.com/profiles/{0}?xml=1";
+        private const string SteamProfile = "https://steamcommunity.com/profiles/{0}";
 
-        // Defining config variables
-        bool logReports;
-        bool sendLink;
+        private readonly Regex _steamProfileIconRegex =
+            new Regex(@"(?<=<avatarIcon>[\w\W]+)https://.+\.jpg(?=[\w\W]+<\/avatarIcon>)", RegexOptions.Compiled,
+                TimeSpan.FromSeconds(1d));
+        
+        private Dictionary<string, uint> _cooldownData = new Dictionary<string, uint>();
 
-        int commandCooldown;
+        private Time _time = GetLibrary<Time>();
 
-        string prefix;
-
-        // Used for linking steam profiles in the report message
-        string steam_URL = "http://steamcommunity.com/profiles/";
-
-        // Defining lists for command cooldowns.
-        List<String> recentUserReportList = new List<string>();
-        List<long> recentTimeReportList = new List<long>();
-
-        // Used for storing data.
-        class StoredData
-        {
-            public HashSet<PlayerInfo> Players = new HashSet<PlayerInfo>();
-
-            public StoredData()
-            {
-            }
-        }
-
-        // Used for formatting
-        class PlayerInfo
-        {
-            public string message;
-
-            public PlayerInfo(String message2)
-            {
-                message = message2;
-            }
-
-        }
-
-        // Creating data variables
-        StoredData storedData;
-
-        // On initiliaize
-        void Init()
-        {
-            // Load configs
-            LoadDefaultConfig();
-            LoadDefaultMessages();
-
-            // Registering permissions
-            permission.RegisterPermission(permUse, this);
-            permission.RegisterPermission(permAdmin, this);
-            permission.RegisterPermission(permIsBlocked, this);
-            permission.RegisterPermission(permIsImmune, this);
-        }
-
-        // Setting up configs
-        protected override void LoadDefaultConfig()
-        {
-            Config["Log reports? (true / false)"] = logReports = GetConfig("Log reports? (true / false)", true);
-            Config["Send steam profile link with reports? (true / false)"] = sendLink = GetConfig("Send steam profile link with reports? (true / false)", true);
-            Config["Cooldown between each report (seconds)"] = commandCooldown = GetConfig("Cooldown between each report (seconds)", 60);
-            Config["Custom chat Prefix: "] = prefix = GetConfig("Custom chat Prefix: ", "<color=silver>[</color><color=orange>DiscordReport</color><color=silver>]</color> ");
-            SaveConfig();
-        }
-
-        #endregion
-
-        #region Localization
-        void LoadDefaultMessages()
-        {
-            // English
-            lang.RegisterMessages(new Dictionary<string, string>
-            {
-                // Message used in           Message sent
-                // the Lang() function
-                ["NoPermission"]           = "{0}You don't have permission to use this command.",
-                ["PlayerNotFound"]         = "{0}Player not found.",
-                ["ReportConfirmation"]     = "{0}Your report has been sent!",
-                ["ReportMessage"]          = "**Reporter:** {0} ( <{5}{1}> )\n**Reported:** {2} ( <{5}{3}> )\n**Reason:** {4}",
-                ["ReportMessageConsole"]   = "\nReporter: {0} ( <{5}{1}> )\nReported: {2} ( <{5}{3}> )\nReason: {4}\n-------------------------------------------------------",
-                ["DrSyntax"]               = "{0}Incorrect syntax! Use /dr block <user>, /dr unblock <user>, or /dr isblocked <user>",
-                ["ReportSyntax"]           = "{0}Incorrect syntax! Use /report <user> <reason> or /dreport <user> <reason>!",
-                ["UnblockSyntax"]          = "{0}Incorrect syntax! Use /dr unblock <user>",
-                ["BlockSyntax"]            = "{0}Incorrect syntax! Use /dr block <user>",
-                ["PlayerBlocked"]          = "{0}{1} ({2}) has been blocked from using the /report <user> command.",
-                ["PlayerUnblocked"]        = "{0}{1} ({2}) has been unblocked from using the /report <user> command.",
-                ["Blocked"]                = "{0}You were blocked by an admin from using that command!",
-                ["Cooldown"]               = "{0}That command is on cooldown!"
-            }, this);
-
-            // French
-            lang.RegisterMessages(new Dictionary<string, string>
-            {
-                ["NoPermission"]           = "{0}Vous n'êtes pas autorisé à utiliser cette commande.",
-                ["PlayerNotFound"]         = "{0}Joueur non trouvé.",
-                ["ReportConfirmation"]     = "{0}Votre rapport a été envoyé!",
-                ["ReportMessage"]          = "**Le Reporter:** {0} ( <{5}{1}> )\n**Signalé:** {2} ( <{5}{3}> )\n**Raison:** {4}",
-                ["ReportMessageConsole"]   = "\nLe Reporter: {0} ( <{5}{1}> )\nSignalé: {2} ( <{5}{3}> )\nRaison: {4}\n-------------------------------------------------------",
-                ["DrSyntax"]               = "{0}Syntaxe incorrecte! Utilisation /dr block <joueur>, /dr unblock <joueur>, ou /dr isblocked <joueur>",
-                ["ReportSyntax"]           = "{0}Syntaxe incorrecte! Utilisation /report <joueur> <raison> ou /dreport <joueur> <raison>!",
-                ["UnblockSyntax"]          = "{0}Syntaxe incorrecte! Utilisation /dr unblock <joueur>",
-                ["BlockSyntax"]            = "{0}Syntaxe incorrecte! Utilisation /dr block <joueur>",
-                ["PlayerBlocked"]          = "{0}{1} ({2}) a été empêché d'utiliser le /report <joueur> commander.",
-                ["PlayerUnblocked"]        = "{0}{1} ({2}) A été débloqué de l'utilisation de /report <joueur> commander.",
-                ["Blocked"]                = "{0}Vous avez été bloqué par un administrateur d'utiliser cette commande!",
-                ["Cooldown"]               = "{0}Cette commande est en rétablissement!"
-
-            }, this, "fr");
-
-            // German
-            lang.RegisterMessages(new Dictionary<string, string>
-            {
-                ["NoPermission"]           = "{0}Sie haben keine Berechtigung, diesen Befehl zu verwenden.",
-                ["PlayerNotFound"]         = "{0}Spieler nicht gefunden.",
-                ["ReportConfirmation"]     = "{0}Ihr Bericht wurde gesendet!",
-                ["ReportMessage"]          = "**Der Reporter:** {0} ( <{5}{1}> )\n**Berichtet:** {2} ( <{5}{3}> )\n**Grund:** {4}",
-                ["ReportMessageConsole"]   = "\nDer Reporter: {0} ( <{5}{1}> )\nBerichtet: {2} ( <{5}{3}> )\nGrund: {4}\n-------------------------------------------------------",
-                ["DrSyntax"]               = "{0}Falsche Syntax! Benutzen /dr block <benutzer>, /dr unblock <benutzer>, oder /dr isblocked <benutzer>",
-                ["ReportSyntax"]           = "{0}Falsche Syntax! Benutzen /report <benutzer> <grund> oder /dreport <benutzer> <grund>!",
-                ["UnblockSyntax"]          = "{0}Falsche syntax! Benutzen /dr unblock <benutzer>",
-                ["BlockSyntax"]            = "{0}Falsche syntax! Benutzen /dr block <benutzer>",
-                ["CommandExample"]         = "{0}Beispielsweise /dr user Bobakanoosh Er betrügt",
-                ["PlayerBlocked"]          = "{0}{1} ({2}) Wurde mit dem Befehl /dr report <benutzer> blockiert.",
-                ["PlayerUnblocked"]        = "{0}{1} ({2}) wurde von der Verwendung der /dr report <benutzer> blockiert.",
-                ["Blocked"]                = "{0}Sie wurden von einem Admin von diesem Befehl blockiert!",
-                ["Cooldown"]               = "{0}Dieser Befehl ist auf Abklingzeit!"
-
-            }, this, "de");
-
-            // Russian
-            lang.RegisterMessages(new Dictionary<string, string>
-            {
-                ["NoPermission"]           = "{0}У вас нет разрешения на использование этой команды.",
-                ["PlayerNotFound"]         = "{0}Игрок не найден.",
-                ["ReportConfirmation"]     = "{0}Ваше сообщение было отправлено!",
-                ["ReportMessage"]          = "**репортер:** {0} ( <{5}{1}> )\n**сообщается:** {2} ( <{5}{3}> )\n**причина:** {4}",
-                ["ReportMessageConsole"]   = "\nрепортер: {0} ( <{5}{1}> )\nсообщается: {2} ( <{5}{3}> )\nпричина: {4}\n-------------------------------------------------------",
-                ["DrSyntax"]               = "{0}Неправильный синтаксис! использование /dr block <пользователь>, /dr unblock <пользователь>, or /dr isblocked <пользователь>",
-                ["ReportSyntax"]           = "{0}Неправильный синтаксис! использование /report <пользователь> <причина> or /dreport <пользователь> <причина>!",
-                ["UnblockSyntax"]          = "{0}Неправильный синтаксис! использование /dr unblock <пользователь>",
-                ["BlockSyntax"]            = "{0}Неправильный синтаксис! использование /dr block <пользователь>",
-                ["PlayerBlocked"]          = "{0}{1} ({3}) был заблокирован с помощью /dr report <пользователь> команда.",
-                ["PlayerUnblocked"]        = "{0}{2} ({3}) разблокирован с помощью /dr report <пользователь> команда.",
-                ["Blocked"]                = "{0}Вы были заблокированы администратором с помощью этой команды!",
-                ["Cooldown"]               = "{0}Эта команда на кулдауне!"
-
-            }, this, "ru");
-
-            // Spanish
-            lang.RegisterMessages(new Dictionary<string, string>
-            {
-                ["NoPermission"]           = "{0}No tiene permiso para utilizar este comando.",
-                ["PlayerNotFound"]         = "{0}Jugador no encontrado.",
-                ["ReportConfirmation"]     = "{0}¡Tu reporte ha sido enviado!",
-                ["ReportMessage"]          = "**Reportero:** {0} ( <{5}{1}> )\n**Informó:** {2} ( <{5}{3}> )\n**Razón:** {4}",
-                ["ReportMessageConsole"]   = "\nReportero: {0} ( <{5}{1}> )\nInformó: {2} ( <{5}{3}> )\nRazón: {4}\n-------------------------------------------------------",
-                ["DrSyntax"]               = "{0}¡Sintaxis incorrecta! Utilizar /dr block <usuario>, /dr unblock <usuario>, or /dr isblocked <usuario>",
-                ["ReportSyntax"]           = "{0}¡Sintaxis incorrecta! Utilizar /report <usuario> <razón> or /dreport <usuario> <razón>!",
-                ["UnblockSyntax"]          = "{0}¡Sintaxis incorrecta! Utilizar /dr unblock <usuario>",
-                ["BlockSyntax"]            = "{0}¡Sintaxis incorrecta! Utilizar /dr block <usuario>",
-                ["PlayerBlocked"]          = "{0}{1} ({2})ha sido bloqueado de usar el /report <usuario> mando.",
-                ["PlayerUnblocked"]        = "{0}{1} ({2}) se ha desbloqueado el uso del /report <usuario> mando.",
-                ["Blocked"]                = "{0}¡El administrador te ha bloqueado el uso de ese comando!",
-                ["Cooldown"]               = "{0}¡Ese comando está en tiempo de reutilización!"
-
-            }, this, "es");
-        }
+        private const string PermissionIgnoreCooldown = "discordreport.ignorecooldown";
+        private const string PermissionAdmin = "discordreport.admin";
+        
         #endregion
         
-        #region Functions
-        
-        // Used for checking if a player is currently on cooldown.
-        public bool onCooldown(IPlayer player)
+        #region Configuration
+
+        private Configuration _config;
+
+        private class Configuration
         {
-            // Gets the current time
-            var currentTime = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+            [JsonProperty(PropertyName = "Webhook URL")]
+            public string Webhook = "YOUR WEBHOOK LINK HERE";
+            
+            [JsonProperty(PropertyName = "Embed Title")]
+            public string EmbedTitle = "My Server Report";
+            
+            [JsonProperty(PropertyName = "Embed Description")]
+            public string EmbedDescription = "Report sent by a player from your server";
+            
+            [JsonProperty(PropertyName = "Embed Color")]
+            public int EmbedColor = 1484265;
 
-            for (int i = 0; i < recentUserReportList.Count; i++)
-            {
-                // If the given player is in the current iteration of the user list
-                if (player.Id == recentUserReportList[i])
-                {
-                    // If the current time is less than the expire time
-                    if (currentTime < recentTimeReportList[i])
-                    {
-                        // Return true, they are on cooldown.
-                        return true;
-                    }
-                    // Otherwise,
-                    else
-                    {
-                        // If the user is not on cooldown, remove the user and time from the lists.
-                        recentUserReportList.Remove(recentUserReportList[i]);
-                        recentTimeReportList.Remove(recentTimeReportList[i]);
-                    }
+            [JsonProperty(PropertyName = "Set Author Icon From Player Profile")]
+            public bool AuthorIcon = true;
 
-                    // Then, break out of the loop so that we don't end up going through dozens of players.
-                    break;
-                }
-            }
+            [JsonProperty(PropertyName = "Use Reporter (True) Or Suspect (False) As Author")]
+            public bool IsReporterIcon = true;
 
-            // Then, return false, the player is not on cooldown.
-            return false;
+            [JsonProperty(PropertyName = "Allow Reporting Admins")]
+            public bool ReportAdmins = false;
+
+            [JsonProperty(PropertyName = "Report Commands", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public List<string> ReportCommands = new List<string> {"report"};
+
+            [JsonProperty(PropertyName = "Allow Only Online Suspects Reports")]
+            public bool OnlyOnlineSuspects = true;
+
+            [JsonProperty(PropertyName = "Cooldown In Seconds")]
+            public uint Cooldown = 300;
+
+            [JsonProperty(PropertyName = "Old User Cache Purge In Seconds")]
+            public uint UserCachePurge = 86400;
         }
-        
-        public bool permissionCheck(IPlayer player, string permission)
+
+        protected override void LoadConfig()
         {
-            // Checking permissions
-            if (!player.IsAdmin)
+            base.LoadConfig();
+            try
             {
-                if (!player.HasPermission(permission))
-                {
-                    player.Message(Lang("NoPermission", null, prefix), player.Id);
-
-                    return false;
-                }
-                else
-                    return true;
-
+                _config = Config.ReadObject<Configuration>();
+                if (_config == null) throw new Exception();
+                SaveConfig();
             }
-            else
-                return true;
+            catch
+            {
+                PrintError("Your configuration file contains an error. Using default configuration values.");
+                LoadDefaultConfig();
+            }
         }
+
+        protected override void SaveConfig() => Config.WriteObject(_config);
+
+        protected override void LoadDefaultConfig() => _config = new Configuration();
 
         #endregion
+        
+        #region Work with Data
 
-        #region CMD_report
-        [Command("report", "dreport")]
-        void reportCommand(IPlayer player, string command, string[] args)
+        private PluginData _data;
+
+        private void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(Name, _data);
+
+        private void LoadData()
         {
-            // Checking permissions
-            if (!permissionCheck(player, "discordreport.use"))
-                return;
-
-            // If the player is on cooldown
-            
-            if (onCooldown(player))
+            try
             {
-                player.Message(Lang("Cooldown", null, prefix), player.Id);
-
-                return;
+                _data = Interface.Oxide.DataFileSystem.ReadObject<PluginData>(Name);
             }
-            
-
-            // If they didn't give enough arguments
-            if (args.Length < 2)
+            catch (Exception e)
             {
-                player.Message(Lang("ReportSyntax", null, prefix), player.Id);
-
-                return;
+                PrintError(e.ToString());
             }
 
-            // If the user isn't blocked from using the report command
-            if (!player.HasPermission(permIsBlocked))
-            {
-                // Finding the user they gave
-                var targetUser = players.FindPlayer(args[0]);
-
-                // Finds the player given in arg[0] (first thing after /report), assigns it to targetUser. If that targetUser is null (doesn't exist), it will return an error
-                if (targetUser == null)
-                {
-                    player.Message(Lang("PlayerNotFound", null, prefix), player.Id);
-
-                    return;
-                }
-                // If the player exists
-                else
-                {
-                    string message = null;
-
-                    // Adding each arg to one string to make format look better.
-                    for (int i = 1; i < args.Length; i++)
-                    {
-                        message += args[i];
-                        message += " ";
-                    }
-
-                    // If the user doesn't want to send steam links with their reports, then set the link to nothing.
-                    if (!sendLink)
-                        steam_URL = "";
-
-                    // Calling Discord's call function. This sends a message with steam id's of both users and their message, which are then sent using a bot script to
-                    // the discord server that your bot is connected to. It also sends it to console.
-
-                    Discord.Call("SendMessage", Lang("ReportMessage", null, player.Name, player.Id, targetUser.Name, targetUser.Id, message, steam_URL));
-                    player.Message(Lang("ReportConfirmation", null, prefix));
-
-                    // If the config wants logging
-                    if (logReports)
-                    {
-                        // Logging the info given to discord to a file. 
-                        Log(Lang("ReportMessageConsole", null, player.Name, player.Id, targetUser.Name, targetUser.Id, message, steam_URL));
-                    }
-
-                    // Setting expireTime to the current time
-                    var expireTime = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
-
-                    // Adding the confiugured cooldown to the current time, which makes it the expired time.
-                    expireTime += commandCooldown;
-
-                    // If they don't have the discordreport.isimmune permission
-                    if (!player.HasPermission(permIsImmune))
-                    {
-                        // Add the users id and the expireTime to a new dynamic list.
-                        recentUserReportList.Add(targetUser.Id);
-                        recentTimeReportList.Add(expireTime);
-
-                     }
-
-                    return;
-                    }
-                }
-
-                else
-                {
-                    player.Message(Lang("Blocked", null, prefix), player.Id);
-
-                    return;
-                }
-            
+            if (_data == null) _data = new PluginData();
         }
-        #endregion
 
-        #region CMD_dr   
-        [Command("dr")]
-        void drCommand(IPlayer player, string command, string[] args)
+        private class PluginData
         {
-            #region Checks
-            // If they just typed /dr
-            if (args.Length == 0)
+            public List<UserCache> Cache = new List<UserCache>();
+
+            public class UserCache
             {
-                player.Message(Lang("DrSyntax", null, prefix), player.Id);
-                
-                return;
-            }
+                public string ID = string.Empty;
+                public string ImageURL = string.Empty;
+                public string LastKnownAddress = string.Empty;
+                public uint LastUpdate = 0;
 
-            #endregion
-
-            #region CMD_ti
-            // Creating the toggleimmunity command
-            if (args[0] == "ti")
-            {
-                if (!permissionCheck(player, "discordreport.admin"))
+                public static int FindIndex(string id)
                 {
-                    player.Message(Lang("NoPermission", null, prefix), player.Id);
+                    for (var i = 0; i < _ins._data.Cache.Count; i++)
+                    {
+                        var cache = _ins._data.Cache[i];
+                        if (cache.ID == id)
+                            return i;
+                    }
 
-                    return;
-                }
-                   
-                // If they didn't user proper syntax
-                if (args.Length != 2)
-                {
-                    player.Message(prefix + " User /dr ti <user>");
-
-                    return;
+                    return -1;
                 }
 
-                // Set targetUser variable to a matched player that they entered in the 2nd arguement (user).
-                var targetUser = players.FindPlayer(args[1]);
-
-                // If they have the immune permission, remove it
-                if (targetUser.HasPermission(permIsImmune))
+                public static UserCache Find(string id)
                 {
-                    targetUser.RevokePermission(permIsImmune);
-                    player.Message($"{prefix}{targetUser.Name}'s immunity has been disabled.");
+                    var index = FindIndex(id);
+                    return index == -1 ? null : _ins._data.Cache[index];
                 }
 
-
-                // If they don't, give it.
-                else
+                public static UserCache TryFind(string id)
                 {
-                    targetUser.GrantPermission(permIsImmune);
-                    player.Message($"{prefix}{targetUser.Name}'s immunity has been enabled.");
-                }
-
-                return;
-            }
-            #endregion
-
-            #region CMD_isblocked
-            // Creating the /dr isblocked <user> com mand
-            if (args[0] == "isblocked")
-            {
-
-                // If the permission check returns false, don't continue.
-                if (!permissionCheck(player, "discordreport.isblocked"))
-                    return;
-
-                // If they didn't user proper syntax
-                if (args.Length != 2)
-                {
-                    player.Message(prefix + " Use /dr isblocked <user>");       
-
-                    return;
-                }
-
-                // Set targetUser variable to a matched player that they entered in the 2nd arguement (user).
-                var targetUser = players.FindPlayer(args[1]);
-
-                // If the targetUser has the permission discordreport.isblocked, then say that they're blocked
-                if (targetUser.HasPermission(permIsBlocked))
-                    player.Message(prefix + targetUser.Name + " is blocked!");
-
-                // Otherwise, say that they're not blocked.
-                else
-                    player.Message(prefix + targetUser.Name + " is not blocked!");
-
-                // Return to exit the rest of the code.
-                return;
-
-            }
-            #endregion
-
-            #region CMD_isimmune
-            // Creating the /dr isimmune <user> command
-            if (args[0] == "isimmune")
-            {
-                // If the permission check returns false, don't continue.
-                if (!permissionCheck(player, "discordreport.isimmune"))
-                    return;
-
-                // If they didn't user proper syntax
-                if (args.Length != 2)
-                {
-                    player.Message(prefix + " Use /dr isimmune <user>");
-
-                    // Return to exit the rest of the code.
-                    return;
-                }
-
-                // Set targetUser variable to a matched player that they entered in the 2nd arguement (user).
-                var targetUser = players.FindPlayer(args[1]);
-
-                // If the targetUser has the permission discordreport.isblocked, then say that they're blocked
-                if (targetUser.HasPermission(permIsImmune))
-                    player.Message(prefix + targetUser.Name + " is immune!");
-
-                // Otherwise, say that they're not blocked.
-                else
-                    player.Message(prefix + targetUser.Name + " is not immune!");
-
-                // Return to exit the rest of the code.
-                return;
-
-            }
-            #endregion
-
-            #region CMD_block
-            // Creating command for /dr block
-            if (args[0] == "block")
-            {
-                // If the permission check returns false, don't continue.
-                if (!permissionCheck(player, "discordreport.admin"))
-                {
-                    player.Message(Lang("NoPermission", null, prefix), player.Id);
-
-                    return;
-                }
-
-                // If they didn't give two arguements (block and the user)
-                if (args.Length != 2)
-                {
-                    player.Message(Lang("BlockSyntax", null, prefix), player.Id);
-
-                    return;
-                }
-
-                // Set targetUser variable to a matched player that they entered in the 2nd arguement (user).
-                var targetUser = players.FindPlayer(args[1]);
-
-                // Give the user they targeted the discordreport.isblocked permission
-                targetUser.GrantPermission(permIsBlocked);
-                player.Message(Lang("PlayerBlocked", null, prefix, targetUser.Name, targetUser.Id));
+                    var cache = Find(id);
+                    if (cache != null)
+                        return cache;
                     
-                return;
-            }
-            #endregion
+                    cache = new UserCache {ID = id};
+                    _ins._data.Cache.Add(cache);
 
-            #region CMD_unblock
-            // Creating command for /dr unblock
-            if (args[0] == "unblock")
-            {
-                // If the permission check returns false, don't continue.
-                if (!permissionCheck(player, "discordreport.admin"))
-                {
-                    player.Message(Lang("NoPermission", null, prefix), player.Id);
-
-                    return;
+                    return cache;
                 }
-
-                if (args.Length != 2)
-                {
-                    player.Message(Lang("UnblockSyntax", null, prefix), player.Id);
-                    return;
-                }
-
-                // If the player has permission
-                var targetUser = players.FindPlayer(args[1]);
-
-                // Revoke the permission from targeted user
-                targetUser.RevokePermission(permIsBlocked);
-                player.Message(Lang("PlayerUnblocked", null, prefix, targetUser.Name, targetUser.Id));
-
-                return;
             }
-
-            #endregion
         }
-        #endregion
 
+        #endregion
+        
+        #region Discord Classes
+        // ReSharper disable NotAccessedField.Local
+
+        private class WebhookBody
+        {
+            [JsonProperty(PropertyName = "embeds")]
+            public EmbedBody[] Embeds;
+        }
+
+        private class EmbedBody
+        {
+            [JsonProperty(PropertyName = "title")]
+            public string Title;
+
+            [JsonProperty(PropertyName = "type")]
+            public string Type;
+            
+            [JsonProperty(PropertyName = "description")]
+            public string Description;
+
+            [JsonProperty(PropertyName = "color")]
+            public int Color;
+
+            [JsonProperty(PropertyName = "author")]
+            public AuthorBody Author;
+
+            [JsonProperty(PropertyName = "fields")]
+            public FieldBody[] Fields;
+
+            public class AuthorBody
+            {
+                [JsonProperty(PropertyName = "name")]
+                public string Name;
+                
+                [JsonProperty(PropertyName = "url")]
+                public string AuthorURL;
+                
+                [JsonProperty(PropertyName = "icon_url")]
+                public string AuthorIconURL;
+            }
+
+            public class FieldBody
+            {
+                [JsonProperty(PropertyName = "name")]
+                public string Name;
+                
+                [JsonProperty(PropertyName = "value")]
+                public string Value;
+                
+                [JsonProperty(PropertyName = "inline")]
+                public bool Inline;
+            }
+        }
+        
+        // ReSharper restore NotAccessedField.Local
+        #endregion
+        
+        #region Hooks
+
+        protected override void LoadDefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+                { "Webhook: Reporter Data Title", "Reporter" },
+                { "Webhook: Suspect Data Title", "Suspect" },
+                { "Webhook: Reporter Data", "{name} ({id}). IP: {ip}.\n" +
+                                            "Ping: {ping}ms. Connected: {connected}" },
+                { "Webhook: Suspect Data", "{name} ({id}). IP: {ip}.\n" +
+                                           "Ping: {ping}ms. Connected: {connected}" },
+                { "Webhook: Report Subject", "Report Subject" },
+                { "Webhook: Report Message", "Report Message" },
+                { "Command: Syntax", "Syntax:\n" +
+                                     "report (ID / Name) (Subject) <Message>\n" +
+                                     "WARNING! Use quotes for names, subject and message." },
+                { "Command: User Not Found", "We were unable to find this user or multiple were found." },
+                { "Command: Report Sent", "Thank you for your report, it was sent to our administration." },
+                { "Command: Exceeded Cooldown", "You have exceeded your cooldown on reports." },
+                { "Command: Cannot Report Admins", "You cannot report admins." }
+            }, this);
+        }
+
+        private void Init()
+        {
+            _ins = this;
+            
+            permission.RegisterPermission(PermissionIgnoreCooldown, this);
+            permission.RegisterPermission(PermissionAdmin, this);
+
+            LoadData();
+
+            foreach (var command in _config.ReportCommands)
+                AddCovalenceCommand(command, nameof(CommandReport));
+        }
+
+        private void OnServerSave()
+        {
+            var currentTime = _time.GetUnixTimestamp();
+            for (var i = _data.Cache.Count - 1; i >= 0; i--)
+            {
+                var user = _data.Cache[i];
+                if (user.LastUpdate - currentTime < _config.UserCachePurge)
+                    _data.Cache.RemoveAt(i);
+            }
+            
+            SaveData();
+        }
+
+        private void Loaded()
+        {
+            foreach (var player in players.Connected)
+                OnUserConnected(player);
+            
+            SaveData();
+        }
+
+        private void Unload()
+        {
+            _ins = null;
+        }
+        
+        private void OnUserConnected(IPlayer player)
+        {
+            if (_config.AuthorIcon)
+                UpdateCachedImage(player);
+
+            PluginData.UserCache.TryFind(player.Id).LastKnownAddress = player.Address;
+            PluginData.UserCache.TryFind(player.Id).LastUpdate = _time.GetUnixTimestamp();
+        }
+
+        #if RUST
+
+        private void OnPlayerReported(BasePlayer player, string targetName, string targetId, string subject,
+            string message, string type)
+        {
+            if (player == null)
+                return;
+
+            var suspect = players.FindPlayer(targetId);
+            if (suspect == null || player.IPlayer == null)
+                return;
+
+            if (!_config.ReportAdmins && suspect.HasPermission(PermissionAdmin))
+                return;
+
+            SendReport(player.IPlayer, suspect, subject, message);
+        }
+
+        #endif
+
+        #endregion
+        
+        #region Commands
+
+        private void CommandReport(IPlayer player, string command, string[] args)
+        {
+            if (args.Length < 2)
+                goto syntax;
+
+            var suspect = players.FindPlayer(args[0]);
+            if (suspect == null || !suspect.IsConnected && _config.OnlyOnlineSuspects)
+            {
+                player.Reply(GetMsg("Command: User Not Found", player.Id));
+                return;
+            }
+
+            if (!_config.ReportAdmins && suspect.HasPermission(PermissionAdmin))
+            {
+                player.Reply(GetMsg("Command: Cannot Report Admins", player.Id));
+                return;
+            }
+
+            if (ExceedsCooldown(player))
+            {
+                player.Reply(GetMsg("Command: Exceeded Cooldown", player.Id));
+                return;
+            }
+
+            SendReport(player, suspect, args[1], args.Length > 2 ? args[2] : string.Empty);
+            return;
+            
+            syntax:
+            player.Reply(GetMsg("Command: Syntax", player.Id));
+        }
+        
+        #endregion
+        
         #region Helpers
 
-        // Getting configs
-        private T GetConfig<T>(string name, T defaultValue)
+        private void UpdateCachedImage(IPlayer player)
         {
-            if (Config[name] == null) Config[name] = defaultValue;
-            return (T)Convert.ChangeType(Config[name], typeof(T));
+            webrequest.Enqueue(string.Format(SteamProfileXML, player.Id), string.Empty,
+                (code, result) =>
+                {
+                    var cache = PluginData.UserCache.TryFind(player.Id);
+                    cache.ImageURL = _steamProfileIconRegex.Match(result).Value;
+                    cache.LastUpdate =  _time.GetUnixTimestamp();
+                },
+                this);
+        }
+        
+        #region Webhook
+        
+        private void SendReport(IPlayer reporter, IPlayer suspect, string subject, string message)
+        {
+            if (ExceedsCooldown(reporter) || !suspect.IsConnected && _config.OnlyOnlineSuspects)
+                return;
+
+            var authorIconURL = string.Empty;
+            var author = _config.IsReporterIcon ? reporter : suspect;
+            if (_config.AuthorIcon)
+            {
+                authorIconURL = PluginData.UserCache.Find(author.Id)?.ImageURL ?? string.Empty;
+                UpdateCachedImage(author); // Won't get update now but will be for any other reports for this user
+            }
+
+            const bool inline = false;
+            var body = new WebhookBody
+            {
+                Embeds = new[]
+                {
+                    new EmbedBody
+                    {
+                        Title = _config.EmbedTitle,
+                        Description = _config.EmbedDescription,
+                        Type = "rich",
+                        Color = _config.EmbedColor,
+                        Author = new EmbedBody.AuthorBody
+                        {
+                            AuthorIconURL = authorIconURL,
+                            AuthorURL = string.Format(SteamProfile, author.Id),
+                            Name = author.Name
+                        },
+                        Fields = new[]
+                        {
+                            new EmbedBody.FieldBody
+                            {
+                                Name = GetMsg("Webhook: Report Subject"),
+                                Value = subject,
+                                Inline = inline
+                            },
+                            new EmbedBody.FieldBody
+                            {
+                                Name = GetMsg("Webhook: Report Message"),
+                                Value = message,
+                                Inline = inline
+                            },
+                            new EmbedBody.FieldBody
+                            {
+                                Name = GetMsg("Webhook: Reporter Data Title"),
+                                Value =
+                                    FormatUserDetails(new StringBuilder(GetMsg("Webhook: Reporter Data")), reporter),
+                                Inline = inline
+                            },
+                            new EmbedBody.FieldBody
+                            {
+                                Name = GetMsg("Webhook: Suspect Data Title"),
+                                Value = FormatUserDetails(new StringBuilder(GetMsg("Webhook: Suspect Data")), suspect),
+                                Inline = inline
+                            }
+                        }
+                    }
+                }
+            };
+
+            webrequest.Enqueue(_config.Webhook, JObject.FromObject(body).ToString(),
+                (code, result) => { SetCooldown(reporter); }, this,
+                RequestMethod.POST);
         }
 
-        // Used for localization messages
-        string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+        private string FormatUserDetails(StringBuilder builder, IPlayer player) => builder
+            .Replace("{name}", player.Name).Replace("{id}", player.Id).Replace("{ip}",
+                PluginData.UserCache.Find(player.Id)?.LastKnownAddress ?? "Unknown")
+            .Replace("{ping}", player.IsConnected ? player.Ping.ToString() : "0")
+            .Replace("{connected}", player.IsConnected.ToString()).ToString();
+        
+        #endregion
+        
+        #region Cooldown
 
-        // Used for logging files
-        void Log(string filename, string text)
+        private bool ExceedsCooldown(IPlayer player)
         {
-            LogToFile(filename, $"[{DateTime.Now}] {text}", this);
+            if (player.HasPermission(PermissionIgnoreCooldown))
+                return false;
+            
+            var currentTime = _time.GetUnixTimestamp();
+            if (_cooldownData.ContainsKey(player.Id))
+                return _cooldownData[player.Id] - currentTime < _config.Cooldown;
+
+            return false;
         }
+
+        private void SetCooldown(IPlayer player) => _cooldownData[player.Id] = _time.GetUnixTimestamp();
+        
+        #endregion
+
+        private string GetMsg(string key, string userId = null) => lang.GetMessage(key, this, userId);
+
         #endregion
     }
 }
