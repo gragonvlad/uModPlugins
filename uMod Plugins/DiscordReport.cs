@@ -412,7 +412,9 @@ namespace Oxide.Plugins
                             new EmbedBody.FieldBody
                             {
                                 Name = GetMsg("Webhook: Report Message"),
-                                Value = message,
+                                Value = string.IsNullOrEmpty(message)
+                                    ? GetMsg("Webhook: Report Message If Empty")
+                                    : message,
                                 Inline = inline
                             },
                             new EmbedBody.FieldBody
