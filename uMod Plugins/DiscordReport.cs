@@ -22,8 +22,7 @@ namespace Oxide.Plugins
         private const string SteamProfile = "https://steamcommunity.com/profiles/{0}";
 
         private readonly Regex _steamProfileIconRegex =
-            new Regex(@"(?<=<avatarIcon>[\w\W]+)https://.+\.jpg(?=[\w\W]+<\/avatarIcon>)", RegexOptions.Compiled,
-                TimeSpan.FromSeconds(1d));
+            new Regex(@"(?<=<avatarIcon>[\w\W]+)https://.+\.jpg(?=[\w\W]+<\/avatarIcon>)", RegexOptions.Compiled);
         
         private Dictionary<string, uint> _cooldownData = new Dictionary<string, uint>();
 
