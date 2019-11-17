@@ -10,7 +10,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Report", "Iv Misticos", "1.0.0")]
+    [Info("Discord Report", "Iv Misticos", "1.0.1")]
     [Description("Send reports from players ingame to a Discord channel")]
     class DiscordReport : CovalencePlugin
     {
@@ -29,6 +29,7 @@ namespace Oxide.Plugins
         private Time _time = GetLibrary<Time>();
 
         private const string PermissionIgnoreCooldown = "discordreport.ignorecooldown";
+        private const string PermissionUse = "discordreport.use";
         private const string PermissionAdmin = "discordreport.admin";
         
         #endregion
@@ -231,13 +232,15 @@ namespace Oxide.Plugins
                                            "Ping: {ping}ms. Connected: {connected}" },
                 { "Webhook: Report Subject", "Report Subject" },
                 { "Webhook: Report Message", "Report Message" },
+                { "Webhook: Report Message If Empty", "No message specified" },
                 { "Command: Syntax", "Syntax:\n" +
                                      "report (ID / Name) (Subject) <Message>\n" +
                                      "WARNING! Use quotes for names, subject and message." },
                 { "Command: User Not Found", "We were unable to find this user or multiple were found." },
                 { "Command: Report Sent", "Thank you for your report, it was sent to our administration." },
                 { "Command: Exceeded Cooldown", "You have exceeded your cooldown on reports." },
-                { "Command: Cannot Report Admins", "You cannot report admins." }
+                { "Command: Cannot Report Admins", "You cannot report admins." },
+                { "Command: Cannot Use", "You cannot use this command since you do not have enough permissions." }
             }, this);
         }
 
@@ -246,6 +249,7 @@ namespace Oxide.Plugins
             _ins = this;
             
             permission.RegisterPermission(PermissionIgnoreCooldown, this);
+            permission.RegisterPermission(PermissionUse, this);
             permission.RegisterPermission(PermissionAdmin, this);
 
             LoadData();
@@ -300,8 +304,9 @@ namespace Oxide.Plugins
             var suspect = players.FindPlayer(targetId);
             if (suspect == null || player.IPlayer == null)
                 return;
-
-            if (!_config.ReportAdmins && suspect.HasPermission(PermissionAdmin))
+            
+            if (!CanUse(player.IPlayer) || suspect.HasPermission(PermissionAdmin) && !_config.ReportAdmins ||
+                ExceedsCooldown(player.IPlayer) || !suspect.IsConnected && _config.OnlyOnlineSuspects)
                 return;
 
             SendReport(player.IPlayer, suspect, subject, message);
@@ -315,6 +320,12 @@ namespace Oxide.Plugins
 
         private void CommandReport(IPlayer player, string command, string[] args)
         {
+            if (!CanUse(player))
+            {
+                player.Reply(GetMsg("Command: Cannot Use", player.Id));
+                return;
+            }
+            
             if (args.Length < 2)
                 goto syntax;
 
@@ -338,6 +349,7 @@ namespace Oxide.Plugins
             }
 
             SendReport(player, suspect, args[1], args.Length > 2 ? args[2] : string.Empty);
+            player.Reply(GetMsg("Command: Report Sent", player.Id));
             return;
             
             syntax:
@@ -364,9 +376,6 @@ namespace Oxide.Plugins
         
         private void SendReport(IPlayer reporter, IPlayer suspect, string subject, string message)
         {
-            if (ExceedsCooldown(reporter) || !suspect.IsConnected && _config.OnlyOnlineSuspects)
-                return;
-
             var authorIconURL = string.Empty;
             var author = _config.IsReporterIcon ? reporter : suspect;
             if (_config.AuthorIcon)
@@ -454,6 +463,8 @@ namespace Oxide.Plugins
         private void SetCooldown(IPlayer player) => _cooldownData[player.Id] = _time.GetUnixTimestamp();
         
         #endregion
+
+        private bool CanUse(IPlayer player) => player.HasPermission(PermissionUse);
 
         private string GetMsg(string key, string userId = null) => lang.GetMessage(key, this, userId);
 
