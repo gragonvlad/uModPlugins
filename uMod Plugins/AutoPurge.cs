@@ -11,7 +11,7 @@ using Time = Oxide.Core.Libraries.Time;
 
 namespace Oxide.Plugins
 {
-    [Info("Auto Purge", "misticos", "2.0.4")]
+    [Info("Auto Purge", "misticos", "2.0.5")]
     [Description("Remove entities if the owner becomes inactive")]
     public class AutoPurge : RustPlugin
     {
@@ -19,7 +19,9 @@ namespace Oxide.Plugins
 
         [PluginReference]
         // ReSharper disable once InconsistentNaming
+        #pragma warning disable 649
         private Plugin PlaceholderAPI;
+        #pragma warning restore 649
 
         private Time _time = GetLibrary<Time>();
 
@@ -44,6 +46,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Last Seen Timer Frequency")]
             public float LastSeenFrequency = 300f;
+
+            [JsonProperty(PropertyName = "Purge Sleepers")]
+            public bool PurgeSleepers = true;
 
             [JsonProperty(PropertyName = "Debug")]
             public bool Debug = false;
@@ -234,6 +239,7 @@ namespace Oxide.Plugins
                 .Replace("{objects}", BaseNetworkable.serverEntities.Count.ToString()));
             
             // ReSharper disable once IteratorMethodResultIsIgnored
+            // We have to ignore it yet so it will lag
             RunPurgeEnumerator();
 
             player.Reply(GetMsg("Purge Ended", player.Id)
@@ -263,7 +269,8 @@ namespace Oxide.Plugins
 
         private void RunPurge()
         {
-            ServerMgr.Instance.StartCoroutine(RunPurgeEnumerator());
+            // Run a coroutine so that nothing lags
+            InvokeHandler.Instance.StartCoroutine(RunPurgeEnumerator());
         }
 
         private IEnumerator RunPurgeEnumerator()
@@ -272,15 +279,35 @@ namespace Oxide.Plugins
             {
                 while (enumerator.MoveNext())
                 {
+                    // Has to be here, what if the plugin unloads when it's still purging?
                     if (!IsLoaded)
                         yield break;
                     
                     var entity = enumerator.Current;
-                    var isDecay = entity is DecayEntity;
-                    if (!isDecay)
+                    
+                    // Skipping invalid entities
+                    if (entity == null || entity.IsDestroyed)
                         continue;
                     
-                    ProcessPurgeEntity(entity as BaseEntity);
+                    if (entity is DecayEntity)
+                    {
+                        // Purging DecayEntity
+                        ProcessPurgeEntity(entity as BaseEntity);
+                    }
+                    else if (_config.PurgeSleepers && entity is BasePlayer)
+                    {
+                        // Puring player
+                        if (!CanPurgeUser((entity as BasePlayer).UserIDString))
+                            continue;
+                        
+                        entity.Kill();
+                    }
+                    else
+                    {
+                        // Continuing if not a player and a decay entity to loop to the next entry each frame
+                        continue;
+                    }
+                    
                     yield return null;
                 }
             }
