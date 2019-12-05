@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using ConVar;
@@ -8,14 +7,13 @@ using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
-using Oxide.Game.Rust.Libraries;
 using UnityEngine;
 using Random = System.Random;
 using Time = Oxide.Core.Libraries.Time;
 
 namespace Oxide.Plugins
 {
-    [Info("Smart Chat Bot", "Iv Misticos", "2.0.11")]
+    [Info("Smart Chat Bot", "Iv Misticos", "2.0.12")]
     [Description("I send chat messages based on some triggers or time.")]
     class SmartChatBot : RustPlugin
     {
@@ -71,10 +69,10 @@ namespace Oxide.Plugins
             public bool MultipleAutoResponses = false;
 
             [JsonProperty(PropertyName = "Minimal Time Between Message And Answer")]
-            public int MinTime = 1;
+            public float MinTime = 1.0f;
 
             [JsonProperty(PropertyName = "Maximal Time Between Message And Answer")]
-            public int MaxTime = 5;
+            public float MaxTime = 3.0f;
 
             [JsonProperty(PropertyName = "Welcome Message", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<string> WelcomeMessage = new List<string> { "Welcome, {name}!", "Hello, dear {name}!", "Hello, {name}! Your IP: { ip }" };
@@ -262,9 +260,6 @@ namespace Oxide.Plugins
                 // Permissions
                 permission.RegisterPermission(responseGroup.Permission, this);
             }
-
-            var cmdLib = GetLibrary<Command>();
-            cmdLib.AddConsoleCommand("smartchatbot.debuginfo", this, CommandConsoleDebugInfo);
         }
  
         // ReSharper disable once SuggestBaseTypeForParameter
@@ -293,26 +288,37 @@ namespace Oxide.Plugins
         private object OnBetterChat(Dictionary<string, object> data)
         {
             PrintDebug("Called OnBetterChat");
-            object playerObj, messageObj;
-            if (!data.TryGetValue("Player", out playerObj) || !data.TryGetValue("Message", out messageObj))
+            object playerObj, messageObj, chatChannel;
+            if (!data.TryGetValue("Player", out playerObj) || !data.TryGetValue("Message", out messageObj) ||
+                !data.TryGetValue("ChatChannel", out chatChannel))
+            {
                 return null;
+            }
+
+            if ((Chat.ChatChannel) chatChannel != Chat.ChatChannel.Global)
+            {
+                return null;
+            }
             
             var player = BasePlayer.Find((playerObj as IPlayer)?.Id);
             var message = messageObj?.ToString();
             if (player == null || !player.IsConnected || string.IsNullOrEmpty(message))
                 return null;
+
+            if (HandleChatMessage(player, message) == null)
+                return null;
             
-            return HandleChatMessage(player, message);
+            data["CancelOption"] = 2;
+            return null;
         }
 
-        private object OnPlayerChat(ConsoleSystem.Arg arg, Chat.ChatChannel channel)
+        private object OnPlayerChat(BasePlayer player, string message, Chat.ChatChannel channel)
         {
             PrintDebug("Called OnPlayerChat");
-            var player = arg.Player();
-            if (player == null || !arg.HasArgs() || channel != Chat.ChatChannel.Global)
+            if (player == null || string.IsNullOrEmpty(message) || channel != Chat.ChatChannel.Global)
                 return null;
 
-            return HandleChatMessage(player, arg.GetString(0));
+            return HandleChatMessage(player, message);
         }
 
         private void OnPlayerInit(BasePlayer player)
@@ -362,26 +368,6 @@ namespace Oxide.Plugins
             else Publish(message.ToString(), string.Empty, usePlayer);
         }
 
-        #endregion
-        
-        #region Commands
-        
-        private bool CommandConsoleDebugInfo(ConsoleSystem.Arg arg)
-        {
-            if (!arg.IsAdmin)
-                return false;
-
-            arg.ReplyWith($"Plugin: {Name}\n" +
-                          $"Version: {Version}\n" +
-                          $"Debug enabled: {_config.Debug}\n" +
-                          $"Server IP: {ConVar.Server.ip}\n" +
-                          $"Average FPS: {Performance.current.frameRateAverage}\n" +
-                          $"Auto Responses Amount: {_config.AutoResponses.Sum(x => x.AutoResponses.Count)}\n" +
-                          $"Triggers Amount: {_config.AutoResponses.Sum(x => x.AutoResponses.Sum(y => y.Triggers.Count))}\n" +
-                          $"Auto Messages Amount: {_config.AutoMessages.Sum(x => x.AutoMessages.Count)}");
-            return true;
-        }
-        
         #endregion
         
         #region Helpers
@@ -444,11 +430,11 @@ namespace Oxide.Plugins
                 SendMessage(player2, RunPlaceholders(player2?.IPlayer, message));
         }
 
-        private void Publish(BasePlayer player, string message) => SendMessage(player, FormatMessage(message));
+        private void Publish(BasePlayer player, string message) => SendMessage(player, RunPlaceholders(player.IPlayer, FormatMessage(message)));
 
         private void SendMessage(BasePlayer player, string message)
         {
-            PrintDebug($"SengMessage: {message}");
+            PrintDebug($"SendMessage: {message}");
             player.SendConsoleCommand("chat.add", 2, _config.ChatSteamID, message);
         }
 
@@ -527,8 +513,8 @@ namespace Oxide.Plugins
 
             PrintDebug($"tNow: {tNow}");
             PrintDebug($"lastSent: {lastSent}");
-            if (lastSent + _config.ParsedCooldown > tNow ||
-                _lastSentGlobal + _config.ParsedCooldownGlobal > tNow)
+            if (_config.ParsedCooldown != 0 && lastSent + _config.ParsedCooldown > tNow ||
+                _config.ParsedCooldownGlobal != 0 && _lastSentGlobal + _config.ParsedCooldownGlobal > tNow)
                 return null;
 
             var matched = false;
@@ -585,9 +571,9 @@ namespace Oxide.Plugins
                             return null;
 
                         if (_config.MinTime <= 0 && _config.MaxTime <= 0)
-                            TrySend(player, autoResponse.SendPublic, answer);
+                            NextTick(() => TrySend(player, autoResponse.SendPublic, answer)); // Next Tick to be sure it's after player's message.
                         else
-                            timer.Once(Random.Next(_config.MinTime, _config.MaxTime), () => TrySend(player, autoResponse.SendPublic, answer));
+                            timer.Once(Mathf.Lerp(_config.MinTime, _config.MaxTime, (float) Random.NextDouble()), () => TrySend(player, autoResponse.SendPublic, answer));
 
                         if (autoResponse.RemoveMessage)
                             removeMessage = true;
@@ -609,6 +595,7 @@ namespace Oxide.Plugins
 
             if (removeMessage)
                 return false;
+            
             return null;
         }
 
