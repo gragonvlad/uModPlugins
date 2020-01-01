@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using Newtonsoft.Json;
@@ -11,21 +12,25 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Power Spawn", "Iv Misticos", "1.1.2")]
-    [Description("Control players' spawning")]
+    [Info("Power Spawn", "Iv Misticos", "1.2.0")]
+    [Description("Control spawns of players and other plugins stuff")]
     class PowerSpawn : RustPlugin
     {
         #region Variables
 
-        private int _worldSize;
-
-        private readonly int _layerTerrain = LayerMask.NameToLayer("Terrain");
+        private static PowerSpawn _ins;
 
         private readonly Random _random = new Random();
 
-        private static PowerSpawn _ins;
+        private Coroutine _coroutine = null;
 
-        private static List<Vector3> _preGeneratedLocations = new List<Vector3>();
+        private int _worldSize;
+        private readonly int _layerTerrain = LayerMask.NameToLayer("Terrain");
+
+        private List<Vector3> _positions = new List<Vector3>();
+
+        private List<BuildingBlock> _listBuildingBlocks = new List<BuildingBlock>();
+        private List<Collider> _listColliders = new List<Collider>();
         
         #endregion
         
@@ -41,26 +46,26 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Minimal Distance To Collider")]
             public int DistanceCollider = 10;
 
-            [JsonProperty(PropertyName = "Maximum Number Of Attempts To Find A Location")]
-            public int AttemptsMax = 200;
+            [JsonProperty(PropertyName = "Number Of Attempts To Find A Position Per Frame")]
+            public int AttemptsPerFrame = 250;
+
+            [JsonProperty(PropertyName = "Number Of Attempts To Find A Pregenerated Position")]
+            public int AttemptsPregenerated = 250;
+
+            [JsonProperty(PropertyName = "Pregenerated Positions Amount")]
+            public int PregeneratedAmount = 1000;
+
+            [JsonProperty(PropertyName = "Pregenerated Amount Check Frequency (Seconds)")]
+            public float PregeneratedCheck = 60f;
 
             [JsonProperty(PropertyName = "Respawn Locations Group")]
             public int RespawnGroup = -2;
 
-            [JsonProperty(PropertyName = "Enable Respawn Locations")]
+            [JsonProperty(PropertyName = "Enable Respawn Locations Group")]
             public bool EnableRespawnGroup = false;
 
-            [JsonProperty(PropertyName = "Pre-Generate Spawn Locations")]
-            public bool PreGenerateSpawn = false;
-
-            [JsonProperty(PropertyName = "Pre-Generated Spawn Locations Amount")]
-            public int PreGenerateAmount = 1000;
-
-            [JsonProperty(PropertyName = "Maximum Number Of Attempts To Find Pre-Generated Spawn Locations")]
-            public int PreGenerateAttempts = 500;
-
-            [JsonProperty(PropertyName = "Location Management Command")]
-            public string LocationCommand = "loc";
+            [JsonProperty(PropertyName = "Location Management Commands", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public string[] LocationCommand = {"loc", "location", "ps"};
 
             [JsonProperty(PropertyName = "Location Management Permission")]
             public string LocationPermission = "powerspawn.location";
@@ -168,70 +173,59 @@ namespace Oxide.Plugins
             {
                 { "No Permission", "nope" },
                 { "Location: Syntax", "Location Syntax:\n" +
-                                     "new (Name) - Create a new location with a specified name\n" +
-                                     "delete (ID) - Delete a location with the specified ID\n" +
-                                     "edit (ID) <Parameter 1> <Value> <...> - Edit a location with the specified ID\n" +
-                                     "update - Apply datafile changes\n" +
-                                     "list - Get a list of locations\n" +
-                                     "validate (ID) - Validate location for buildings and colliders" },
+                                      "new (Name) - Create a new location with a specified name\n" +
+                                      "delete (ID) - Delete a location with the specified ID\n" +
+                                      "edit (ID) <Parameter 1> <Value> <...> - Edit a location with the specified ID\n" +
+                                      "update - Apply datafile changes\n" +
+                                      "list - Get a list of locations\n" +
+                                      "validate (ID) - Validate location for buildings and colliders" },
                 { "Location: Edit Syntax", "Location Edit Parameters:\n" +
-                                          "move (x;y;z / here) - Move a location to the specified position\n" +
-                                          "group (ID / reset) - Set group of a location or reset the group" },
+                                           "move (x;y;z / here) - Move a location to the specified position\n" +
+                                           "group (ID / reset) - Set group of a location or reset the group" },
                 { "Location: Unable To Parse Position", "Unable to parse the position" },
                 { "Location: Unable To Parse Group", "Unable to parse the entered group" },
                 { "Location: Format", "Location ID: {id}; Group: {group}; Position: {position}; Name: {name}" },
-                { "Location: Not Found", "Sorry, I couldn't find the location you specified." },
+                { "Location: Not Found", "Location was not found." },
                 { "Location: Edit Finished", "Edit was finished." },
                 { "Location: Removed", "Location was removed from our database." },
                 { "Location: Updated", "Datafile changes were applied." },
-                { "Location: Validation Format", "Buildings invalid: {buildings}; Colliders invalid: {colliders}" },
-                { "Generated Respawn Locations", "We have pre-generated respawn locations ({count})" }
+                { "Location: Validation Format", "Buildings invalid: {buildings}; Colliders invalid: {colliders}" }
             }, this);
         }
 
-        private void OnServerInitialized()
+        private void Init()
         {
             _ins = this;
             _worldSize = ConVar.Server.worldsize;
             LoadData();
 
-            if (_config.PreGenerateSpawn)
-            {
-                if (_config.EnableRespawnGroup)
-                {
-                    PrintError("Cannot use both pre-generated spawn locations and respawn group. Disable one of them.");
-                    Unsubscribe(nameof(OnPlayerRespawn));
-                    return;
-                }
-                
-                while (_preGeneratedLocations.Count < _config.PreGenerateAmount)
-                {
-                    Vector3? position = null;
-                    for (var i = 0; i < _config.PreGenerateAttempts && !position.HasValue; i++)
-                    {
-                        position = TryFindPosition();
-                    }
-
-                    if (!position.HasValue)
-                    {
-                        PrintWarning("Could not pre-generate respawn locations");
-                        Unsubscribe(nameof(OnPlayerRespawn));
-                        return;
-                    }
-                    
-                    _preGeneratedLocations.Add(position.Value);
-                }
-                
-                Puts(GetMsg("Generated Respawn Locations").Replace("{count}", _preGeneratedLocations.Count.ToString()));
-            }
-
             permission.RegisterPermission(_config.LocationPermission, this);
             AddCovalenceCommand(_config.LocationCommand, nameof(CommandLocation));
         }
 
+        private void OnServerInitialized()
+        {
+            _coroutine = InvokeHandler.Instance.StartCoroutine(PositionGeneration());
+        }
+
+        private void Unload()
+        {
+            InvokeHandler.Instance.StopCoroutine(_coroutine);
+        }
+
         private object OnPlayerRespawn(BasePlayer player)
         {
-            var position = FindPosition();
+            Vector3? position;
+            if (_config.EnableRespawnGroup)
+            {
+                var positions = new List<PluginData.Location>(PluginData.Location.FindByGroup(_config.RespawnGroup));
+                position = positions[_random.Next(0, positions.Count)].Position;
+            }
+            else
+            {
+                position = FindPregeneratedPosition();
+            }
+
             if (!position.HasValue)
             {
                 PrintDebug($"Haven't found a position for {player.displayName}");
@@ -379,8 +373,8 @@ namespace Oxide.Plugins
 
                     var location = _data.Locations[locationIndex.Value];
                     player.Reply(GetMsg("Location: Validation Format", player.Id)
-                        .Replace("{buildings}", CheckBadBuilding(location.Position).ToString())
-                        .Replace("{colliders}", CheckBadCollider(location.Position).ToString()));
+                        .Replace("{buildings}", IsValidForBuilding(location.Position).ToString())
+                        .Replace("{colliders}", IsValidForColliders(location.Position).ToString()));
                     return;
                 }
 
@@ -483,47 +477,64 @@ namespace Oxide.Plugins
             var locations = PluginData.Location.FindByGroup(group);
             return JObject.FromObject(locations);
         }
+
+        private Vector3? GetPregeneratedLocation() => FindPregeneratedPosition();
         
         #endregion
         
         #region Helpers
 
-        private Vector3? FindPosition()
+        // ReSharper disable once IteratorNeverReturns
+        private IEnumerator PositionGeneration()
         {
             Vector3? position = null;
-            for (var i = 0; i < _config.AttemptsMax && !position.HasValue; i++)
+            
+            while (true)
             {
-                // Getting position
-                if (_config.PreGenerateSpawn)
-                {
-                    position = _preGeneratedLocations[_random.Next(0, _config.PreGenerateAmount)];
-                }
-                else if (_config.EnableRespawnGroup)
-                {
-                    var locationsEn = PluginData.Location.FindByGroup(_config.RespawnGroup);
-                    if (locationsEn == null)
-                        continue;
-                    
-                    var locations = new List<PluginData.Location>(locationsEn);
-                    if (locations.Count != 0)
-                    {
-                        var location = locations[_random.Next(0, locations.Count)];
-                        PrintDebug($"Using location {location.Name}");
-                        position = location.Position;
-                    }
-                }
-                else
+                if (_positions.Count >= _config.PregeneratedAmount)
+                    yield return new WaitForSeconds(_config.PregeneratedCheck);
+
+                var attempts = 0;
+                while (attempts++ < _config.AttemptsPerFrame && !position.HasValue)
                 {
                     position = TryFindPosition();
                 }
 
-                if (!position.HasValue) continue;
+                if (position.HasValue)
+                {
+                    _positions.Add(position.Value);
+                    position = null; // Null it to prevent while loop skip
+                }
+
+                yield return null;
+            }
+        }
+
+        private Vector3? FindPregeneratedPosition()
+        {
+            Vector3? position = null;
+            for (var i = 0; i < _config.AttemptsPregenerated; i++)
+            {
+                if (_positions.Count <= 0)
+                {
+                    PrintDebug($"FindPregeneratedPosition: Positions were not generated");
+                    return null;
+                }
+
+                var index = _random.Next(0, _positions.Count);
+                position = _positions[index];
                 
-                PrintDebug($"Found position: {position.Value}");
+                PrintDebug($"FindPregeneratedPosition: Found {position.Value}");
                 
                 // If it's a "bad" position, continue trying to find a good one.
-                if (CheckBadBuilding(position.Value) || CheckBadCollider(position.Value))
-                    position = null; // :P
+                if (IsValidForBuilding(position.Value) && IsValidForColliders(position.Value))
+                    break;
+                
+                // Remove invalid position
+                _positions.RemoveAt(index);
+                
+                // Reset position value
+                position = null;
             }
 
             return position;
@@ -532,10 +543,14 @@ namespace Oxide.Plugins
         private Vector3? TryFindPosition()
         {
             var position = new Vector3(GetRandomPosition(), 0, GetRandomPosition());
-            var height = TerrainMeta.HeightMap.GetHeight(position);
-            if (height > 0)
-                position.y = height;
-            else
+            position.y = TerrainMeta.HeightMap.GetHeight(position);
+
+            // Invalid if under the water
+            if (position.y < TerrainMeta.WaterMap.GetHeight(position))
+                return null;
+
+            // Invalid if has buildings or colliders in the configured range
+            if (!IsValidForBuilding(position) || !IsValidForColliders(position))
                 return null;
 
             return position;
@@ -549,27 +564,31 @@ namespace Oxide.Plugins
                 Interface.Oxide.LogDebug($"{Name} > " + message);
         }
 
-        private bool CheckBadBuilding(Vector3 position)
+        private bool IsValidForBuilding(Vector3 position)
         {
-            var buildings = new List<BuildingBlock>();
-            Vis.Entities(position, _config.DistanceBuilding, buildings, Layers.Construction);
-            return buildings.Count > 0;
+            _listBuildingBlocks.Clear();
+            
+            Vis.Entities(position, _config.DistanceBuilding, _listBuildingBlocks, Layers.Construction);
+            return _listBuildingBlocks.Count <= 0;
         }
 
-        private bool CheckBadCollider(Vector3 position)
+        private bool IsValidForColliders(Vector3 position)
         {
-            var colliders = new List<Collider>();
-            Vis.Components(position, _config.DistanceCollider, colliders);
-            foreach (var collider in colliders)
+            _listColliders.Clear();
+            
+            Vis.Components(position, _config.DistanceCollider, _listColliders);
+            foreach (var collider in _listColliders)
             {
                 var gameObject = collider.gameObject;
                 if (gameObject.layer == _layerTerrain)
+                {
                     continue;
-                
-                return true;
+                }
+
+                return false;
             }
             
-            return false;
+            return true;
         }
 
         private static string GetMsg(string key, string userId = null) => _ins.lang.GetMessage(key, _ins, userId);
