@@ -12,7 +12,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Power Spawn", "Iv Misticos", "1.2.0")]
+    [Info("Power Spawn", "Iv Misticos", "1.2.1")]
     [Description("Control spawns of players and other plugins stuff")]
     class PowerSpawn : RustPlugin
     {
@@ -48,6 +48,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Number Of Attempts To Find A Position Per Frame")]
             public int AttemptsPerFrame = 250;
+
+            [JsonProperty(PropertyName = "Number Of Positions Per Frame")]
+            public int PositionsPerFrame = 10;
 
             [JsonProperty(PropertyName = "Number Of Attempts To Find A Pregenerated Position")]
             public int AttemptsPregenerated = 250;
@@ -178,10 +181,12 @@ namespace Oxide.Plugins
                                       "edit (ID) <Parameter 1> <Value> <...> - Edit a location with the specified ID\n" +
                                       "update - Apply datafile changes\n" +
                                       "list - Get a list of locations\n" +
-                                      "validate (ID) - Validate location for buildings and colliders" },
+                                      "validate (ID) - Validate location for buildings and colliders\n" +
+                                      "debug - Print minor debug information" },
                 { "Location: Edit Syntax", "Location Edit Parameters:\n" +
                                            "move (x;y;z / here) - Move a location to the specified position\n" +
                                            "group (ID / reset) - Set group of a location or reset the group" },
+                { "Location: Debug", "Currently available pre-generated positions: {amount}"},
                 { "Location: Unable To Parse Position", "Unable to parse the position" },
                 { "Location: Unable To Parse Group", "Unable to parse the entered group" },
                 { "Location: Format", "Location ID: {id}; Group: {group}; Position: {position}; Name: {name}" },
@@ -378,6 +383,12 @@ namespace Oxide.Plugins
                     return;
                 }
 
+                case "debug":
+                {
+                    player.Reply(GetMsg("Location: Debug", player.Id).Replace("{amount}", _positions.Count.ToString()));
+                    return;
+                }
+
                 default:
                 {
                     goto syntax;
@@ -487,23 +498,21 @@ namespace Oxide.Plugins
         // ReSharper disable once IteratorNeverReturns
         private IEnumerator PositionGeneration()
         {
-            Vector3? position = null;
-            
             while (true)
             {
                 if (_positions.Count >= _config.PregeneratedAmount)
                     yield return new WaitForSeconds(_config.PregeneratedCheck);
 
                 var attempts = 0;
-                while (attempts++ < _config.AttemptsPerFrame && !position.HasValue)
+                var found = 0;
+                while (attempts++ < _config.AttemptsPerFrame && found < _config.PositionsPerFrame && _positions.Count < _config.PregeneratedAmount)
                 {
-                    position = TryFindPosition();
-                }
-
-                if (position.HasValue)
-                {
+                    var position = TryFindPosition();
+                    if (!position.HasValue)
+                        continue;
+                    
                     _positions.Add(position.Value);
-                    position = null; // Null it to prevent while loop skip
+                    found++;
                 }
 
                 yield return null;
