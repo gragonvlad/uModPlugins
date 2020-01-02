@@ -10,7 +10,7 @@ using Object = UnityEngine.Object;
 
 namespace Oxide.Plugins
 {
-    [Info("Skins", "Iv Misticos", "2.0.4")]
+    [Info("Skins", "Iv Misticos", "2.0.5")]
     [Description("Change workshop skins of items easily")]
     class Skins : RustPlugin
     {
@@ -350,17 +350,18 @@ namespace Oxide.Plugins
 
         private object CanMoveItem(Item item, PlayerInventory playerLoot, uint targetContainerId, int slot, int amount)
         {
-            PrintDebug(
-                $"Moving {item.info.shortname} ({item.amount}) from {item.parent?.uid ?? 0} to {targetContainerId} in {slot} ({amount})");
-
-            if (item.parent?.uid == targetContainerId)
-            {
-                PrintDebug("// CanMoveItem: Ignoring same containers");
-                return null;
-            }
-
             var containerFrom = ContainerController.Find(item.parent);
             var containerTo = ContainerController.Find(targetContainerId);
+            if ((containerFrom ?? containerTo) == null)
+                return null;
+            
+            PrintDebug($"CanMoveItem: {item.info.shortname} ({item.amount}) from {item.parent?.uid ?? 0} to {targetContainerId} in {slot} ({amount})");
+            if (item.parent?.uid == targetContainerId)
+            {
+                PrintDebug("// CanMoveItem: Preventing same containers");
+                return false;
+            }
+            
             return CanMoveItemFrom(containerFrom, item, playerLoot, slot, amount) ??
                    CanMoveItemTo(containerTo, item, playerLoot, slot, amount);
         }
@@ -372,12 +373,12 @@ namespace Oxide.Plugins
             if (controller == null || item.amount == amount)
                 return null; // That's all legal, calm down
             
-            PrintDebug("Changing main item amount");
             var mainItem = controller.Container.GetSlot(0);
             if (mainItem == null) // In case there is no "main item" in container we're moving from
                 return false; // Just cancel. Illegal!
             
-            mainItem.amount = item.amount - amount; // Change main item amount and refresh content.
+            if (mainItem.uid != item.uid)
+                mainItem.amount = item.amount - amount; // Change main item amount and refresh content.
             
             // Next frame because else it will change already existing item which may result in a wrong amount of the item :(
             NextFrame(() => controller.UpdateContent(0));
@@ -927,7 +928,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                MoveItem(item, Owner.inventory.containerMain, true);
+                MoveItem(item, Owner.inventory.containerMain);
                 SetupContent(item);
             }
 
@@ -995,8 +996,6 @@ namespace Oxide.Plugins
             {
                 Close();
                 Container.Kill();
-                
-                PrintDebug("Destroyed container");
             }
 
             public void UpdateContent(int page)
@@ -1014,7 +1013,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                if (source.uid == 0)
+                if (source.uid == 0 || !source.IsValid())
                 {
                     PrintDebug("// Invalid item that was removed. Player may have tried to dupe something");
                     return;
@@ -1047,7 +1046,7 @@ namespace Oxide.Plugins
                 PrintDebug($"Updating content. Page: {page}");
                 Clear();
                 
-                MoveItem(source, Container, false, 0);
+                MoveItem(source, Container);
                 DestroyUI();
                 DrawUI(page);
 
@@ -1063,7 +1062,7 @@ namespace Oxide.Plugins
                     var skin = skins[i];
                     var duplicate = GetDuplicateItem(source, skin);
                     
-                    MoveItem(duplicate, Container, false, slot++);
+                    MoveItem(duplicate, Container, slot++);
                 }
             }
 
@@ -1118,9 +1117,12 @@ namespace Oxide.Plugins
                 return duplicate;
             }
 
-            private void MoveItem(Item item, ItemContainer container, bool stacking, int slot = -1)
+            private void MoveItem(Item item, ItemContainer container, int slot = 0)
             {
-                if (container.IsFull())
+                while (container.SlotTaken(slot) && container.capacity > slot)
+                    slot++;
+                
+                if (container.IsFull() || container.SlotTaken(slot))
                 {
                     PrintDebug("Container full, dropping item");
                     item.Drop(Owner.transform.position, Vector3.zero);
