@@ -10,7 +10,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Report", "Iv Misticos", "1.0.1")]
+    [Info("Discord Report", "Iv Misticos", "1.0.3")]
     [Description("Send reports from players ingame to a Discord channel")]
     class DiscordReport : CovalencePlugin
     {
@@ -66,6 +66,14 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Allow Only Online Suspects Reports")]
             public bool OnlyOnlineSuspects = true;
+
+            #if RUST
+            [JsonProperty(PropertyName = "Show Recent Suspect Combatlog")]
+            public bool ShowCombatlog = false;
+            
+            [JsonProperty(PropertyName = "Recent Combatlog Entries")]
+            public int CombatlogEntries = 3;
+            #endif
 
             [JsonProperty(PropertyName = "Cooldown In Seconds")]
             public uint Cooldown = 300;
@@ -226,6 +234,18 @@ namespace Oxide.Plugins
             {
                 { "Webhook: Reporter Data Title", "Reporter" },
                 { "Webhook: Suspect Data Title", "Suspect" },
+                #if RUST
+                { "Webhook: Combatlog Title", "Suspect's Combatlog #{n}" },
+                { "Webhook: Combatlog Attacker Title", "Attacker" },
+                { "Webhook: Combatlog Target Title", "Target" },
+                { "Webhook: Combatlog Time Title", "Time" },
+                { "Webhook: Combatlog Weapon Title", "Weapon" },
+                { "Webhook: Combatlog Ammo Title", "Ammo" },
+                { "Webhook: Combatlog Distance Title", "Distance" },
+                { "Webhook: Combatlog Old HP Title", "Old HP" },
+                { "Webhook: Combatlog New HP Title", "New HP" },
+                { "Webhook: Combatlog Info Title", "Info" },
+                #endif
                 { "Webhook: Reporter Data", "{name} ({id}). IP: {ip}.\n" +
                                             "Ping: {ping}ms. Connected: {connected}" },
                 { "Webhook: Suspect Data", "{name} ({id}). IP: {ip}.\n" +
@@ -234,7 +254,7 @@ namespace Oxide.Plugins
                 { "Webhook: Report Message", "Report Message" },
                 { "Webhook: Report Message If Empty", "No message specified" },
                 { "Command: Syntax", "Syntax:\n" +
-                                     "report (ID / Name) (Subject) <Message>\n" +
+                                     "report (ID / Name) \"(Subject)\" \"<Message>\"\n" +
                                      "WARNING! Use quotes for names, subject and message." },
                 { "Command: User Not Found", "We were unable to find this user or multiple were found." },
                 { "Command: Report Sent", "Thank you for your report, it was sent to our administration." },
@@ -264,7 +284,7 @@ namespace Oxide.Plugins
             for (var i = _data.Cache.Count - 1; i >= 0; i--)
             {
                 var user = _data.Cache[i];
-                if (user.LastUpdate - currentTime < _config.UserCachePurge)
+                if (user.LastUpdate + _config.UserCachePurge < currentTime)
                     _data.Cache.RemoveAt(i);
             }
             
@@ -373,7 +393,7 @@ namespace Oxide.Plugins
         }
         
         #region Webhook
-        
+
         private void SendReport(IPlayer reporter, IPlayer suspect, string subject, string message)
         {
             var authorIconURL = string.Empty;
@@ -384,7 +404,7 @@ namespace Oxide.Plugins
                 UpdateCachedImage(author); // Won't get update now but will be for any other reports for this user
             }
 
-            const bool inline = false;
+            const string type = "rich";
             var body = new WebhookBody
             {
                 Embeds = new[]
@@ -393,7 +413,7 @@ namespace Oxide.Plugins
                     {
                         Title = _config.EmbedTitle,
                         Description = _config.EmbedDescription,
-                        Type = "rich",
+                        Type = type,
                         Color = _config.EmbedColor,
                         Author = new EmbedBody.AuthorBody
                         {
@@ -407,7 +427,7 @@ namespace Oxide.Plugins
                             {
                                 Name = GetMsg("Webhook: Report Subject"),
                                 Value = subject,
-                                Inline = inline
+                                Inline = false
                             },
                             new EmbedBody.FieldBody
                             {
@@ -415,29 +435,105 @@ namespace Oxide.Plugins
                                 Value = string.IsNullOrEmpty(message)
                                     ? GetMsg("Webhook: Report Message If Empty")
                                     : message,
-                                Inline = inline
+                                Inline = false
                             },
                             new EmbedBody.FieldBody
                             {
                                 Name = GetMsg("Webhook: Reporter Data Title"),
                                 Value =
                                     FormatUserDetails(new StringBuilder(GetMsg("Webhook: Reporter Data")), reporter),
-                                Inline = inline
+                                Inline = false
                             },
                             new EmbedBody.FieldBody
                             {
                                 Name = GetMsg("Webhook: Suspect Data Title"),
                                 Value = FormatUserDetails(new StringBuilder(GetMsg("Webhook: Suspect Data")), suspect),
-                                Inline = inline
+                                Inline = false
                             }
                         }
                     }
                 }
             };
 
+            #if RUST
+            if (_config.ShowCombatlog && suspect.Object is BasePlayer)
+            {
+                var events = CombatLog.Get(((BasePlayer) suspect.Object).userID).ToArray();
+                for (var i = 1; i <= _config.CombatlogEntries && i <= events.Length; i++)
+                {
+                    var combat = events[events.Length - i];
+                    
+                    Array.Resize(ref body.Embeds, 1 + i);
+                    body.Embeds[i] = new EmbedBody
+                    {
+                        Title = GetMsg("Webhook: Combatlog Title").Replace("{n}", $"{i}"),
+                        Type = type,
+                        Color = _config.EmbedColor,
+                        Fields = new[]
+                        {
+                            new EmbedBody.FieldBody
+                            {
+                                Name = GetMsg("Webhook: Combatlog Attacker Title"),
+                                Value = combat.attacker,
+                                Inline = true
+                            },
+                            new EmbedBody.FieldBody
+                            {
+                                Name = GetMsg("Webhook: Combatlog Target Title"),
+                                Value = combat.target,
+                                Inline = true
+                            },
+                            new EmbedBody.FieldBody
+                            {
+                                Name = GetMsg("Webhook: Combatlog Time Title"),
+                                Value = (UnityEngine.Time.realtimeSinceStartup - combat.time).ToString("0.0s"),
+                                Inline = true
+                            },
+                            new EmbedBody.FieldBody
+                            {
+                                Name = GetMsg("Webhook: Combatlog Weapon Title"),
+                                Value = combat.weapon,
+                                Inline = true
+                            },
+                            new EmbedBody.FieldBody
+                            {
+                                Name = GetMsg("Webhook: Combatlog Ammo Title"),
+                                Value = combat.ammo,
+                                Inline = true
+                            },
+                            new EmbedBody.FieldBody
+                            {
+                                Name = GetMsg("Webhook: Combatlog Distance Title"),
+                                Value = combat.distance.ToString("0.0m"),
+                                Inline = true
+                            },
+                            new EmbedBody.FieldBody
+                            {
+                                Name = GetMsg("Webhook: Combatlog Old HP Title"),
+                                Value = combat.health_old.ToString("0.0"),
+                                Inline = true
+                            },
+                            new EmbedBody.FieldBody
+                            {
+                                Name = GetMsg("Webhook: Combatlog New HP Title"),
+                                Value = combat.health_new.ToString("0.0"),
+                                Inline = true
+                            },
+                            new EmbedBody.FieldBody
+                            {
+                                Name = GetMsg("Webhook: Combatlog Info Title"),
+                                Value = string.IsNullOrEmpty(combat.info) ? "none" : combat.info,
+                                Inline = true
+                            }
+                        }
+                    };
+                }
+            }
+            #endif
+
             webrequest.Enqueue(_config.Webhook, JObject.FromObject(body).ToString(),
-                (code, result) => { SetCooldown(reporter); }, this,
-                RequestMethod.POST);
+                (code, result) => SetCooldown(reporter), this, RequestMethod.POST,
+                new Dictionary<string, string> {{"Content-Type", "application/json"}});
         }
 
         private string FormatUserDetails(StringBuilder builder, IPlayer player) => builder
